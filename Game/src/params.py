@@ -51,7 +51,7 @@ class EnvironmentHyperparameters:
         self.GAME_DURATION = 20 #5* 60  # 5 minutes
 
         # number of player
-        self.NUMBER_OF_PLAYERS = 2
+        self.NUMBER_OF_PLAYERS = 1
 
         self.calculate_positions()
 
