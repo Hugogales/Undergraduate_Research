@@ -14,7 +14,7 @@ else:
     VIS_PARAMS = VisualHyperparametters()
 
 class Goal:
-    def __init__(self, position, width, height):
+    def __init__(self, position, width, height, invert_image = False):
         """
         Initializes the Goal object.
 
@@ -26,7 +26,6 @@ class Goal:
         self.position = position
         self.width = width
         self.height = height
-        self.color = VIS_PARAMS.GREEN
 
         # Create boundary square within the goal
         self.inner_height = self.height - 2 * ENV_PARAMS.PLAYER_HEIGHT
@@ -41,15 +40,13 @@ class Goal:
             self.inner_height
         )
 
-    def draw(self, surface):
-        """
-        Draws the goal and its inner boundary on the given surface.
-
-        :param surface: The Pygame surface to draw on.
-        """
-        # Draw outer goal
-        pygame.draw.rect(surface, self.color, 
-                         (self.position[0], self.position[1], self.width, self.height))
+        if ENV_PARAMS.RENDER:
+            self.color = VIS_PARAMS.GREEN
+            # Load ball image
+            original_image = pygame.image.load(VIS_PARAMS.GOAL_SPRITE).convert_alpha()
+            if invert_image:
+                original_image = pygame.transform.flip(original_image, True, False)
+            self.original_image = pygame.transform.scale(original_image, (self.width * 1.1 , self.height  * 1.1))
 
     def check_goal(self, ball):
         """
@@ -72,3 +69,25 @@ class Goal:
             in_goal_x = (ball.position[0] - ball.radius) >= left
 
         return in_goal_x 
+       
+    def draw(self, surface):
+        """
+        Draws the goal and its inner boundary on the given surface.
+
+        :param surface: The Pygame surface to draw on.
+        """
+        # Draw outer goal
+        new_rect = self.original_image.get_rect(center=(self.position[0]+ self.width/2, self.position[1] + self.height/2))
+        # Draw the rotated image on the surface
+        surface.blit(self.original_image, new_rect.topleft)
+    
+    def draw_grass(self, surface):
+        """
+        Draws the grass area in the goal.
+
+        :param surface: The Pygame surface to draw on.
+        """
+        # Draw green goal area
+        pygame.draw.rect(surface, VIS_PARAMS.GREEN, (self.position[0], self.position[1], self.width, self.height))
+        
+        

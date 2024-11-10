@@ -3,6 +3,9 @@ import random
 
 class EnvironmentHyperparameters:
     def __init__(self):
+        # Games
+        self.NUMBER_OF_GAMES = 1
+
         # Screen dimensions
         self.WIDTH = 1300  # Increased width for a wider field
         self.HEIGHT = 700
@@ -19,17 +22,17 @@ class EnvironmentHyperparameters:
         self.FPS = 60
 
         # Player properties
-        self.PLAYER_RADIUS = 25
+        self.PLAYER_RADIUS = 20
         self.PLAYER_SPEED = 5
         self.PLAYER_HEIGHT = self.PLAYER_RADIUS * 2  # Diameter
         self.PLAYER_POWER = 1 # player vs player collision power 
 
         # Ball properties
-        self.BALL_RADIUS = 15 
+        self.BALL_RADIUS = 12 
         self.BALL_FRICTION = 0.95
         self.BALL_MAX_SPEED = 13
         self.BALL_HEIGHT = self.BALL_RADIUS * 2  # Diameter
-        self.BALL_POWER = 25 # player vs ball collision power
+        self.BALL_POWER = 35 # player vs ball collision power
 
         # Goal properties
         self.GOAL_WIDTH = 0.05 * self.WIDTH  # 5% of the screen width (65 pixels)
@@ -111,12 +114,13 @@ class VisualHyperparametters:
 
         self.TITLE = "2D Soccer Game"
 
-        self.TEAM_1_COLOR = "Blue" #options : blue, red, green, White
-        self.TEAM_2_COLOR = "Green"
+        # options : blue, red, green, White
+        self.TEAM_1_COLOR = "White"
+        self.TEAM_2_COLOR = "Red"
 
         self.WHITE = (255, 255, 255)
         self.BLUE = (0, 0, 255)     # Player 1 color
-        self.GREEN = (50, 200, 50)    # Player 2 color
+        self.GREEN = (83, 160, 23)    # Player 2 color
         self.BLACK = (0, 0, 0)      # Ball color
         self.RED = (255, 0, 0)      # Goal color
         self.YELLOW = (255, 255, 0) # Play area boundary color
@@ -152,6 +156,9 @@ class VisualHyperparametters:
         self.BALL_SPRITE = f"files/PNG/Equipment/ball_soccer{num}.png"
 
         self.BACKGROUND = "files/PNG/Backgrounds/pitch.png"
+
+        self.GOAL_SPRITE = "files/PNG/Backgrounds/goal.png"
+
         
 
         

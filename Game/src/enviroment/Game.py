@@ -73,6 +73,7 @@ class Game:
             position=[0, (ENV_PARAMS.HEIGHT / 2) - (goal_height / 2)],  # Left side, centered vertically
             width=ENV_PARAMS.GOAL_WIDTH,
             height=goal_height,
+            invert_image=True,
         )
         self.goal2 = Goal(
             position=[ENV_PARAMS.WIDTH - ENV_PARAMS.GOAL_WIDTH, (ENV_PARAMS.HEIGHT / 2) - (goal_height / 2)],  # Right side, centered vertically
@@ -81,8 +82,8 @@ class Game:
         )
 
         # Initialize Scores
-        self.score_player1 = 0
-        self.score_player2 = 0
+        self.score_team1 = 0
+        self.score_team2 = 0
 
         self.timer = ENV_PARAMS.GAME_DURATION
         self.simulation_time = 0
@@ -212,14 +213,14 @@ class Game:
         """
         # Check Goal 1 (Left)
         if self.goal1.check_goal(self.ball):
-            self.score_player2 += 1
-            print(f"Goal for Player 2! Score: Player1 {self.score_player1} - Player2 {self.score_player2}")
+            self.score_team2 += 1
+            print(f"Goal for Player 2! Score: Player1 {self.score_team1} - Player2 {self.score_team2}")
             self.reset_game()
 
         # Check Goal 2 (Right)
         if self.goal2.check_goal(self.ball):
-            self.score_player1 += 1
-            print(f"Goal for Player 1! Score: Player1 {self.score_player1} - Player2 {self.score_player2}")
+            self.score_team1 += 1
+            print(f"Goal for Player 1! Score: Player1 {self.score_team1} - Player2 {self.score_team2}")
             self.reset_game()
 
 
@@ -251,32 +252,45 @@ class Game:
         # Draw Play Area
         self.render_play_area()
 
-        # Draw Goals
-        self.goal1.draw(self.screen)
-        self.goal2.draw(self.screen)
+        self.goal1.draw_grass(self.screen)
+        self.goal2.draw_grass(self.screen)
 
         # Draw Players and Ball
         for player in self.players:
             player.draw(self.screen)
         self.ball.draw(self.screen)
 
-        # Draw Scores
-        score_text = self.font.render(
-            f"Player1: {self.score_player1}   Player2: {self.score_player2}", 
-            True, 
-            ENV_PARAMS.BLACK
-        )
-        self.screen.blit(score_text, (ENV_PARAMS.WIDTH//2 - score_text.get_width()//2, 20))
+        # Draw Goals
+        self.goal1.draw(self.screen)
+        self.goal2.draw(self.screen)
 
-                # Draw Timer
+        # Define offsets
+        offset_x = 100
+        offset_y = 20
+        
+        # Draw Timer
         minutes = int(self.timer) // 60
         seconds = int(self.timer) % 60
-        timer_text = self.font.render(
-            f"Time Left: {minutes:02}:{seconds:02}", 
+        
+        # Render Scores
+        score_text = self.font.render(
+            f"Team {VIS_PARAMS.TEAM_1_COLOR}: {self.score_team1} | Team {VIS_PARAMS.TEAM_2_COLOR} : {self.score_team2} | Time : {minutes:02}:{seconds:02}", 
             True, 
             ENV_PARAMS.BLACK
         )
-        self.screen.blit(timer_text, (ENV_PARAMS.WIDTH//2 - timer_text.get_width()//2, 60))
+        
+        # Calculate the position and size of the box
+        box_x = offset_x
+        box_y = offset_y
+        box_width = score_text.get_width() + 20  # Add some padding
+        box_height = score_text.get_height() + 10  # Add some padding
+        
+        # Draw the box
+        pygame.draw.rect(self.screen, ENV_PARAMS.WHITE, (box_x, box_y, box_width, box_height))
+        pygame.draw.rect(self.screen, ENV_PARAMS.BLACK, (box_x, box_y, box_width, box_height), 2)  # Border
+        
+        # Blit the text inside the box
+        self.screen.blit(score_text, (box_x + 10, box_y + 5))
 
 
         pygame.display.flip()  # Update the full display surface to the screen
@@ -298,7 +312,7 @@ class Game:
             self.timer = ENV_PARAMS.GAME_DURATION - self.simulation_time
 
             if self.timer <= 0:
-                print(f"Game Over! Final Score: Player1 {self.score_player1} - Player2 {self.score_player2}")
+                print(f"Game Over! Final Score: Player1 {self.score_team1} - Player2 {self.score_team2}")
                 running = False
 
             # Get the current state of all keyboard buttons
@@ -321,5 +335,6 @@ class Game:
             self.render()
 
         # Clean up Pygame resources
-        pygame.quit()
-        sys.exit()
+        return self.score_team1, self.score_team2
+
+    
