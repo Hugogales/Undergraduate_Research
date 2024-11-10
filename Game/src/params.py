@@ -1,25 +1,76 @@
 import random 
 
 
-class EnvironmentHyperparameters:
+class AIHyperparameters:
+    _instance = None
+
     def __init__(self):
-        # Games
-        self.NUMBER_OF_GAMES = 1
+        if self._initialized:
+            return
+        self._initialized = True
+
+        ## rewards
+        self._env = EnvironmentHyperparameters()
+
+        self.DISTANCE_REWARD = 0.1
+        self.GOAL_REWARD = 100
+
+        self.STATE_SIZE = 4 * self._env.NUMBER_OF_PLAYERS + 4
+        self.ACTION_SIZE = 8
+
+        self.gamma = 0.99 # discount rate
+        self.learning_rate = 0.001
+        self.batch_size = 32
+
+        self.epsilon = 1.0  # exploration rate
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(AIHyperparameters, cls).__new__(cls, *args, **kwargs)
+            cls._instance._initialized = False
+        return cls._instance
+
+class EnvironmentHyperparameters:
+    _instance = None
+
+    def __init__(self):
+        if self._initialized:
+            return 
+        self._initialized = True
+
+        # Options: train, test, play, replay
+        self.MODE = "play" # train or test
+
+        self.RENDER = True
+
+        if self.MODE == "play":
+            self.NUMBER_OF_GAMES = 1
+            self.FPS = 60
+            self.NUMBER_OF_PLAYERS = 1
+            self.GAME_DURATION = 20 #5* 60  # 5 minutes
+            self.RENDER = True
+
+        elif self.MODE == "replay":
+            self.FILE_NAME = "rand_log"
+
+            #params set automatically
+            self.NUMBER_OF_GAMES = 0
+            self.FPS = 0
+            self.NUMBER_OF_PLAYERS = 0
+            self.GAME_DURATION = 0
+
+        else: # train or test
+            self.NUMBER_OF_GAMES = 1
+            self.FPS = 60
+            self.NUMBER_OF_PLAYERS = 3
+            self.GAME_DURATION = 2 * 60
 
         # Screen dimensions
         self.WIDTH = 1300  # Increased width for a wider field
         self.HEIGHT = 700
-
-        # Colors (R, G, B) # TODO : REMOVE THIS
-        self.WHITE = (255, 255, 255)
-        self.BLUE = (0, 0, 255)     # Player 1 color
-        self.GREEN = (0, 255, 0)    # Player 2 color
-        self.BLACK = (0, 0, 0)      # Ball color
-        self.RED = (255, 0, 0)      # Goal color
-        self.YELLOW = (255, 255, 0) # Play area boundary color
-
-        # Frame rate
-        self.FPS = 60
 
         # Player properties
         self.PLAYER_RADIUS = 20
@@ -37,7 +88,6 @@ class EnvironmentHyperparameters:
         # Goal properties
         self.GOAL_WIDTH = 0.05 * self.WIDTH  # 5% of the screen width (65 pixels)
         self.GOAL_HEIGHT = 0.26 * self.HEIGHT  # 25% of the screen height (175 pixels)
-        self.GOAL_COLOR = self.RED
 
         # Play area vertical boundaries
         self.PLAY_AREA_TOP = 0
@@ -50,16 +100,14 @@ class EnvironmentHyperparameters:
         self.PLAY_AREA_WIDTH = self.PLAY_AREA_RIGHT - self.PLAY_AREA_LEFT
         self.PLAY_AREA_HEIGHT = self.HEIGHT
 
-
-        self.GAME_DURATION = 20 #5* 60  # 5 minutes
-
-        # number of player
-        self.NUMBER_OF_PLAYERS = 1
-
         self.calculate_positions()
-
-        self.RENDER = True
     
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(EnvironmentHyperparameters, cls).__new__(cls, *args, **kwargs)
+            cls._instance._initialized = False
+        return cls._instance
+
     def calculate_positions(self):
         """
         Calculates and assigns player positions for both teams based on the number of players.
@@ -106,12 +154,23 @@ class EnvironmentHyperparameters:
             for pos in self.team_1_positions
         ]
     
-
-ENV = EnvironmentHyperparameters()
-
 class VisualHyperparametters:
-    def __init__(self):
+    _instance = None
 
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super(VisualHyperparametters, cls).__new__(cls, *args, **kwargs)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        self.update()
+
+    def update(self):
+        ENV = EnvironmentHyperparameters()
         self.TITLE = "2D Soccer Game"
 
         # options : blue, red, green, White
@@ -135,29 +194,29 @@ class VisualHyperparametters:
 
         for i in range(ENV.NUMBER_OF_PLAYERS):
             num1 = random.randint(1, 5) # number from 1 to 4 including 4
-            self.TEAM1_SPRITES.append(f"files/PNG/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} ({num1}).png")
+            self.TEAM1_SPRITES.append(f"files/Images/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} ({num1}).png")
             if num1 == 5:
-                self.TEAM1_ARMS.append(f"files/PNG/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (12).png")
-                self.TEAM1_LEGS.append(f"files/PNG/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (14).png")
+                self.TEAM1_ARMS.append(f"files/Images/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (12).png")
+                self.TEAM1_LEGS.append(f"files/Images/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (14).png")
             else:
-                self.TEAM1_ARMS.append(f"files/PNG/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (11).png")
-                self.TEAM1_LEGS.append(f"files/PNG/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (13).png")
+                self.TEAM1_ARMS.append(f"files/Images/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (11).png")
+                self.TEAM1_LEGS.append(f"files/Images/{self.TEAM_1_COLOR}/character{self.TEAM_1_COLOR} (13).png")
 
             num2 = random.randint(1, 5) # number from 1 to 4 including 4
-            self.TEAM2_SPRITES.append(f"files/PNG/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} ({num2}).png")
+            self.TEAM2_SPRITES.append(f"files/Images/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} ({num2}).png")
             if num2 == 5:
-                self.TEAM2_ARMS.append(f"files/PNG/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (12).png")
-                self.TEAM2_LEGS.append(f"files/PNG/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (14).png")
+                self.TEAM2_ARMS.append(f"files/Images/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (12).png")
+                self.TEAM2_LEGS.append(f"files/Images/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (14).png")
             else:
-                self.TEAM2_ARMS.append(f"files/PNG/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (11).png")
-                self.TEAM2_LEGS.append(f"files/PNG/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (13).png")
+                self.TEAM2_ARMS.append(f"files/Images/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (11).png")
+                self.TEAM2_LEGS.append(f"files/Images/{self.TEAM_2_COLOR}/character{self.TEAM_2_COLOR} (13).png")
         
         num = random.randint(1, 4)
-        self.BALL_SPRITE = f"files/PNG/Equipment/ball_soccer{num}.png"
+        self.BALL_SPRITE = f"files/Images/Equipment/ball_soccer{num}.png"
 
-        self.BACKGROUND = "files/PNG/Backgrounds/pitch.png"
+        self.BACKGROUND = "files/Images/Backgrounds/pitch.png"
 
-        self.GOAL_SPRITE = "files/PNG/Backgrounds/goal.png"
+        self.GOAL_SPRITE = "files/Images/Backgrounds/goal.png"
 
         
 

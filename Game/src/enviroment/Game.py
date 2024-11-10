@@ -1,24 +1,22 @@
 import pygame
-import sys
+import json
 import math
 from params import EnvironmentHyperparameters, VisualHyperparametters
 from enviroment.Ball import Ball
 from enviroment.Player import Player
 from enviroment.Goal import Goal
+from functions.Logger import Logger
+from AI.StateParser import StateParser
+from AI.RewardFunction import RewardFunction 
 
-# Instantiate Pygame and initialize all imported Pygame modules
 
 # Instantiate Environment Hyperparameters as a global constant
 ENV_PARAMS = EnvironmentHyperparameters()
 if ENV_PARAMS.RENDER:
     VIS_PARAMS = VisualHyperparametters()
 
-# =======================
-# Game Class
-# =======================
-
 class Game:
-    def __init__(self):
+    def __init__(self, log_name = None):
         """
         Initializes the Game object by setting up players, ball, goals, and scores.
         """
@@ -27,7 +25,7 @@ class Game:
         self.team_1 = []
         self.team_2 = []
         for i in range(ENV_PARAMS.NUMBER_OF_PLAYERS):
-            if ENV_PARAMS.RENDER:
+            if ENV_PARAMS.MODE == "play":
                 #Wasd
                 self.team_1.append(
                     Player(
@@ -101,6 +99,18 @@ class Game:
         else:
             self.clock = None
 
+
+        self.log_name = log_name
+        if log_name is not None:
+            self.logger = Logger(self.log_name)
+            self.logger.write_parameters(ENV_PARAMS)
+
+        
+        # model stuff
+        self.state_parser = StateParser()
+        self.reward_function = RewardFunction(self)
+
+
     def handle_collisions(self):
         """
         Handles collision between players and the ball, and between players themselves.
@@ -159,6 +169,7 @@ class Game:
             ball.velocity[0] -= (1 + restitution) * velocity_along_normal * direction_x
             ball.velocity[1] -= (1 + restitution) * velocity_along_normal * direction_y
 
+
     def check_player_collision(self, player1, player2):
         """
         Checks and handles collision between two players.
@@ -214,15 +225,16 @@ class Game:
         # Check Goal 1 (Left)
         if self.goal1.check_goal(self.ball):
             self.score_team2 += 1
-            print(f"Goal for Player 2! Score: Player1 {self.score_team1} - Player2 {self.score_team2}")
             self.reset_game()
+            return (False, True)
 
         # Check Goal 2 (Right)
         if self.goal2.check_goal(self.ball):
             self.score_team1 += 1
-            print(f"Goal for Player 1! Score: Player1 {self.score_team1} - Player2 {self.score_team2}")
             self.reset_game()
-
+            return (True, False)
+        
+        return (False, False)
 
     def reset_game(self):
         """
@@ -233,7 +245,6 @@ class Game:
         for player in self.players:
             player.reset()
     
-
     def render_play_area(self):
         """
         Place the pitch image on the screen.
@@ -248,7 +259,7 @@ class Game:
         if not ENV_PARAMS.RENDER:
             return
 
-        self.screen.fill(ENV_PARAMS.BLACK)  # Clear the screen with white
+        self.screen.fill(VIS_PARAMS.BLACK)  # Clear the screen with white
         # Draw Play Area
         self.render_play_area()
 
@@ -276,7 +287,7 @@ class Game:
         score_text = self.font.render(
             f"Team {VIS_PARAMS.TEAM_1_COLOR}: {self.score_team1} | Team {VIS_PARAMS.TEAM_2_COLOR} : {self.score_team2} | Time : {minutes:02}:{seconds:02}", 
             True, 
-            ENV_PARAMS.BLACK
+            VIS_PARAMS.BLACK
         )
         
         # Calculate the position and size of the box
@@ -286,8 +297,8 @@ class Game:
         box_height = score_text.get_height() + 10  # Add some padding
         
         # Draw the box
-        pygame.draw.rect(self.screen, ENV_PARAMS.WHITE, (box_x, box_y, box_width, box_height))
-        pygame.draw.rect(self.screen, ENV_PARAMS.BLACK, (box_x, box_y, box_width, box_height), 2)  # Border
+        pygame.draw.rect(self.screen, VIS_PARAMS.WHITE, (box_x, box_y, box_width, box_height))
+        pygame.draw.rect(self.screen, VIS_PARAMS.BLACK, (box_x, box_y, box_width, box_height), 2)  # Border
         
         # Blit the text inside the box
         self.screen.blit(score_text, (box_x + 10, box_y + 5))
@@ -295,9 +306,14 @@ class Game:
 
         pygame.display.flip()  # Update the full display surface to the screen
 
-    def run(self):
+    
+
+#  ----- GAME LOOPS FOR PLAYING, REPLAYING, AND RUN -------
+
+    def run_play(self):
         """
         Runs the main game loop.
+        Intende for human players.
         """
         running = True
         while running:
@@ -312,7 +328,6 @@ class Game:
             self.timer = ENV_PARAMS.GAME_DURATION - self.simulation_time
 
             if self.timer <= 0:
-                print(f"Game Over! Final Score: Player1 {self.score_team1} - Player2 {self.score_team2}")
                 running = False
 
             # Get the current state of all keyboard buttons
@@ -329,12 +344,116 @@ class Game:
             self.handle_collisions()
 
             # Check for goals
-            self.check_goals()
+            goal1, goal2 = self.check_goals()
+
+
+            if self.log_name is not None:
+                self.logger.log_state(self.players, self.ball, self.timer)
 
             # Render everything
             self.render()
+        
+        if self.log_name is not None:
+            self.logger.close()
 
         # Clean up Pygame resources
         return self.score_team1, self.score_team2
 
-    
+    def replay(self, states):
+        """
+        Replays the game from the logged data.
+        """
+        running = True
+        self.clock = pygame.time.Clock()
+
+        current_state_index = 0
+
+        while running and current_state_index < len(states):
+            self.clock.tick(ENV_PARAMS.FPS)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+
+            # Get the current state
+            state = states[current_state_index]
+            self.timer = state['time']
+
+            # Update Players
+            for player, player_state in zip(self.players, state['players']):
+
+                player.position = player_state['position']
+                player.velocity = player_state['velocity']
+
+                player.direction = math.degrees(math.atan2(
+                    player.velocity[1],
+                    player.velocity[0]
+                ))
+                player.leg_angle = math.degrees(math.atan2(
+                    player.velocity[1],
+                    player.velocity[0]
+                ))
+                if player.velocity[0] == 0 and player.velocity[1] == 0:
+                    player.is_moving = False
+                else:
+                    player.is_moving = True
+            
+            # Update Ball
+            self.ball.position = state['ball']['position']
+            self.ball.velocity = state['ball']['velocity']
+
+            # Render everything
+            self.render()
+
+            current_state_index += 1
+
+    def run(self, model):
+        """
+        Runs the main game loop.
+        """
+        running = True
+        while running:
+            if ENV_PARAMS.RENDER:
+                self.clock.tick(ENV_PARAMS.FPS)  # Maintain the desired frame rate if rendering
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+
+            self.simulation_time += self.delta_time
+            self.timer = ENV_PARAMS.GAME_DURATION - self.simulation_time
+
+            if self.timer <= 0:
+                running = False
+
+            states = self.state_parser.parse_state(self.players, self.ball)
+
+            # Handle players' movement
+            for player, state in zip(self.players, states):
+                input = model.move(state)
+                player.move(input)
+
+            # Update ball's movement
+            self.ball.update_position()
+
+            # Handle collisions between players and the ball, and between players themselves
+            self.handle_collisions()
+
+            # Check for goals
+            goal1, goal2 = self.check_goals()
+
+            rewards = self.reward_function.calculate_rewards(goal1, goal2)
+
+            if self.log_name is not None:
+                self.logger.log_state(self.players, self.ball, self.timer)
+
+            # Render everything
+            self.render()
+        
+        if self.log_name is not None:
+            self.logger.close()
+
+        return self.score_team1, self.score_team2
+
+
+

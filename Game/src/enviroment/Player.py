@@ -35,6 +35,10 @@ class Player:
         :param right_key: Pygame key constant for moving right.
         """
         # Set original and current positions based on team and player ID
+
+        self.team_id = team_id
+        self.player_id = player_id
+
         if team_id == 1:
             self.original_position = ENV_PARAMS.team_1_positions[player_id]
         else:
@@ -55,7 +59,6 @@ class Player:
         # Animation and Direction Attributes
 
         if ENV_PARAMS.RENDER:
-            self.color = VIS_PARAMS.BLUE if team_id == 1 else VIS_PARAMS.GREEN
             self.is_moving = False
 
             # Load images
@@ -115,6 +118,11 @@ class Player:
             # Flip right leg image for mirroring
             self.right_leg_image = pygame.transform.flip(self.leg, True, False)
 
+    def _use_keys():
+        """
+        Returns the keys used by the player for movement.
+        """
+
 
     def handle_movement(self, keys):
         arr = [
@@ -143,6 +151,12 @@ class Player:
         if arr[3] == 1: # right
             vx += self.speed
 
+        # Normalize velocity to maintain constant speed
+        if vx != 0 or vy != 0:
+            magnitude = math.sqrt(vx ** 2 + vy ** 2)
+            vx = (vx / magnitude) * self.speed
+            vy = (vy / magnitude) * self.speed
+        
         self.velocity = [vx, vy]
 
         if ENV_PARAMS.RENDER:
@@ -235,8 +249,6 @@ class Player:
     def draw(self, surface):
         if not ENV_PARAMS.RENDER:
             return
-
-
 
         # Leg scaling factors based on leg sizes
         left_leg_scale_factor = abs( self.left_leg_size / 10 )# Adjust divisor as needed
