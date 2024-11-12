@@ -49,12 +49,12 @@ class EnvironmentHyperparameters:
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 60
-            self.NUMBER_OF_PLAYERS = 1
-            self.GAME_DURATION = 20 #5* 60  # 5 minutes
+            self.NUMBER_OF_PLAYERS = 3
+            self.GAME_DURATION = 50 #5* 60  # 5 minutes
             self.RENDER = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "rand_log"
+            self.FILE_NAME = "last_game"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -63,6 +63,8 @@ class EnvironmentHyperparameters:
             self.GAME_DURATION = 0
 
         else: # train or test
+            self.log_name = "game_number_"
+            self.log_interval = 50
             self.NUMBER_OF_GAMES = 1
             self.FPS = 60
             self.NUMBER_OF_PLAYERS = 3
@@ -174,8 +176,8 @@ class VisualHyperparametters:
         self.TITLE = "2D Soccer Game"
 
         # options : blue, red, green, White
-        self.TEAM_1_COLOR = "White"
-        self.TEAM_2_COLOR = "Red"
+        self.TEAM_1_COLOR = "blue"
+        self.TEAM_2_COLOR = "green"
 
         self.WHITE = (255, 255, 255)
         self.BLUE = (0, 0, 255)     # Player 1 color
