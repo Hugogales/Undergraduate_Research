@@ -49,8 +49,8 @@ class EnvironmentHyperparameters:
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 60
-            self.NUMBER_OF_PLAYERS = 3
-            self.GAME_DURATION = 50 #5* 60  # 5 minutes
+            self.NUMBER_OF_PLAYERS = 2
+            self.GAME_DURATION = 2 * 60 #5* 60  # 5 minutes
             self.RENDER = True
 
         elif self.MODE == "replay":
