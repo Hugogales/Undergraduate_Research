@@ -43,10 +43,12 @@ class Logger:
 
 def set_parameters(parameters):
     Env_params = EnvironmentHyperparameters()
+    CAP_FPS = Env_params.CAP_FPS
     for key, value in parameters.items():
         if hasattr(Env_params, key):
             setattr(Env_params, key, value)
-        
 
     setattr(Env_params, "RENDER", True)
+    setattr(Env_params, "CAP_FPS", CAP_FPS)
+    print(f"CAP_FPS: {CAP_FPS}")
 

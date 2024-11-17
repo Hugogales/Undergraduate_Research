@@ -48,8 +48,12 @@ class Player:
         # Movement keys
         self.up_key = up_key
         self.down_key = down_key
-        self.left_key = left_key
-        self.right_key = right_key
+        if team_id == 1:
+            self.left_key = left_key
+            self.right_key = right_key
+        else:
+            self.left_key = right_key
+            self.right_key = left_key
 
         # Player attributes
         self.radius = ENV_PARAMS.PLAYER_RADIUS
@@ -142,16 +146,26 @@ class Player:
         """
         vx, vy = 0, 0
 
-        if arr[0] == 1: # up
-            vy -= self.speed
-        if arr[1] == 1: # down
-            vy += self.speed
-        if arr[2] == 1: # left
-            vx -= self.speed
-        if arr[3] == 1: # right
-            vx += self.speed
+        if self.team_id == 1:
+            if arr[0] == 1: # up
+                vy -= self.speed
+            if arr[1] == 1: # down
+                vy += self.speed
+            if arr[2] == 1: # left
+                vx -= self.speed
+            if arr[3] == 1: # right
+                vx += self.speed
+        elif self.team_id == 2:
+            if arr[0] == 1: # up
+                vy -= self.speed
+            if arr[1] == 1: # down
+                vy += self.speed
+            if arr[3] == 1: # right
+                vx -= self.speed
+            if arr[2] == 1: # left
+                vx += self.speed
 
-        # Normalize velocity to maintain constant speed
+                # Normalize velocity to maintain constant speed
         if vx != 0 or vy != 0:
             magnitude = math.sqrt(vx ** 2 + vy ** 2)
             vx = (vx / magnitude) * self.speed

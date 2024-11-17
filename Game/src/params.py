@@ -12,19 +12,28 @@ class AIHyperparameters:
         ## rewards
         self._env = EnvironmentHyperparameters()
 
-        self.DISTANCE_REWARD = 0.1
+        self.stage2 = 10
+        self.stage3 = 30
+
+        self.DISTANCE_REWARD_BALL_matrix = [10, 5, 1]
+        self.DISTANCE_REWARD_GOAL_matrix = [1, 5, 10]
+
+        self.DISTANCE_REWARD_BALL = 10
+        self.DISTANCE_REWARD_GOAL = 1
         self.GOAL_REWARD = 100
 
-        self.STATE_SIZE = 4 * self._env.NUMBER_OF_PLAYERS + 4
-        self.ACTION_SIZE = 8
+        self.STATE_SIZE = 8 * self._env.NUMBER_OF_PLAYERS + 4
+        self.ACTION_SIZE = 9
 
-        self.gamma = 0.99 # discount rate
+        self.gamma = 0.994 # discount rate
         self.learning_rate = 0.001
         self.batch_size = 32
 
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
+        self.epsilon_decay = 0.9999
+
+        self.target_update_freq = 1000
 
 
     def __new__(cls, *args, **kwargs):
@@ -42,19 +51,20 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay
-        self.MODE = "play" # train or test
+        self.MODE = "train" # train or test
 
-        self.RENDER = True
+        self.RENDER = False
+        self.CAP_FPS = False
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 60
-            self.NUMBER_OF_PLAYERS = 2
-            self.GAME_DURATION = 2 * 60 #5* 60  # 5 minutes
+            self.NUMBER_OF_PLAYERS = 1
+            self.GAME_DURATION = 30 #5* 60  # 5 minutes
             self.RENDER = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "last_game"
+            self.FILE_NAME = "game_number_350"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -63,12 +73,13 @@ class EnvironmentHyperparameters:
             self.GAME_DURATION = 0
 
         else: # train or test
-            self.log_name = "game_number_"
-            self.log_interval = 50
+            self.log_name = "game_number"
+            self.log_interval = 5
             self.NUMBER_OF_GAMES = 1
             self.FPS = 60
-            self.NUMBER_OF_PLAYERS = 3
-            self.GAME_DURATION = 2 * 60
+            self.NUMBER_OF_PLAYERS = 1
+            self.GAME_DURATION = 60 
+            self.EPOCHS = 100
 
         # Screen dimensions
         self.WIDTH = 1300  # Increased width for a wider field

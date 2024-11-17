@@ -27,6 +27,12 @@ class RewardFunction:
             ]
         }
 
+        self.distance_to_goal =  math.hypot(
+            self.game.ball.position[0] - self.goal_centers[2][0],
+            self.game.ball.position[1] - self.goal_centers[2][1]
+        )
+
+
     def calculate_distance_reward(self, player):
         """
         Calculates the small reward based on the ball's distance to the opponent's goal.
@@ -47,11 +53,31 @@ class RewardFunction:
         )
 
         # Normalize the distance
-        normalized_distance = distance / (self.env_params.WIDTH / 2)
+        normalized_distance = distance / self.distance_to_goal 
 
         # Calculate reward (closer to goal yields higher reward)
-        reward = (1 - normalized_distance) * self.ai_params.DISTANCE_REWARD
+        reward = (1 - normalized_distance) * self.ai_params.DISTANCE_REWARD_GOAL
 
+        return reward
+    
+    def calculate_distance_to_ball_reward(self, player):
+        """
+        Calculates the small reward based on the player's distance to the ball.
+
+        :param player: The Player object for whom the reward is calculated.
+        :return: The calculated small reward.
+        """
+        # Calculate distance between the player and the ball
+        distance = math.hypot(
+            player.position[0] - self.game.ball.position[0],
+            player.position[1] - self.game.ball.position[1]
+        )
+
+        # Normalize the distance
+        normalized_distance = distance / (self.env_params.PLAY_AREA_WIDTH / 3)
+
+        # Calculate reward (closer to ball yields higher reward)
+        reward = (1 - normalized_distance) * self.ai_params.DISTANCE_REWARD_BALL
         return reward
     
     def calculate_rewards(self, goal1, goal2):
@@ -62,9 +88,8 @@ class RewardFunction:
         rewards = []
 
         for player in self.game.players:
-            total_reward = 0
-            # Calculate distance reward
-            distance_reward = self.calculate_distance_reward(player)
+            total_reward = self.calculate_distance_reward(player)
+            total_reward += self.calculate_distance_to_ball_reward(player)
 
             if goal1 and player.team_id == 1:
                 # Calculate the total reward for team 1
@@ -79,8 +104,7 @@ class RewardFunction:
                 # Calculate the total reward for team 1
                 total_reward -= self.ai_params.GOAL_REWARD
             
-            total_reward += distance_reward
-
+            total_reward = total_reward / 100
             rewards.append(total_reward)
 
         return rewards

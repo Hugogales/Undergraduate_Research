@@ -10,6 +10,8 @@ def format_time(seconds):
     return f"{int(days)}d {int(hours)}h {int(minutes)}m {seconds:.3f}s"
 
 def format_log_file(name):
+    if name == None:
+        return None
     return f"files/Logs/{name}.json"
 
 

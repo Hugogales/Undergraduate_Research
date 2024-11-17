@@ -317,7 +317,7 @@ class Game:
         """
         running = True
         while running:
-            if ENV_PARAMS.RENDER:
+            if ENV_PARAMS.RENDER and ENV_PARAMS.CAP_FPS:
                 self.clock.tick(ENV_PARAMS.FPS)  # Maintain the desired frame rate if rendering
 
             for event in pygame.event.get():
@@ -329,6 +329,7 @@ class Game:
 
             if self.timer <= 0:
                 running = False
+
 
             # Get the current state of all keyboard buttons
             keys = pygame.key.get_pressed()
@@ -345,7 +346,6 @@ class Game:
 
             # Check for goals
             goal1, goal2 = self.check_goals()
-
 
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer)
@@ -364,12 +364,14 @@ class Game:
         Replays the game from the logged data.
         """
         running = True
+
         self.clock = pygame.time.Clock()
 
         current_state_index = 0
 
         while running and current_state_index < len(states):
-            self.clock.tick(ENV_PARAMS.FPS)
+            if ENV_PARAMS.RENDER and ENV_PARAMS.CAP_FPS:
+                self.clock.tick(ENV_PARAMS.FPS)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -412,8 +414,9 @@ class Game:
         Runs the main game loop.
         """
         running = True
+        total_rewards = 0
         while running:
-            if ENV_PARAMS.RENDER:
+            if ENV_PARAMS.RENDER and ENV_PARAMS.CAP_FPS:
                 self.clock.tick(ENV_PARAMS.FPS)  # Maintain the desired frame rate if rendering
 
             for event in pygame.event.get():
@@ -429,9 +432,12 @@ class Game:
             states = self.state_parser.parse_state(self.players, self.ball)
 
             # Handle players' movement
+            actions = []
             for player, state in zip(self.players, states):
-                input = model.move(state)
-                player.move(input)
+                action_input = model.select_action(state)
+                actions.append(action_input)
+                move_input = model._action_to_input(action_input)
+                player.move(move_input)
 
             # Update ball's movement
             self.ball.update_position()
@@ -443,17 +449,27 @@ class Game:
             goal1, goal2 = self.check_goals()
 
             rewards = self.reward_function.calculate_rewards(goal1, goal2)
+            next_states = self.state_parser.parse_state(self.players, self.ball)
+            for i, state in enumerate(states):
+                reward = rewards[i]
+                done = not running
+                model.remember(state, actions[i], reward, next_states[i], done)
+                model.replay()
+                total_rewards += abs(reward)
 
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer)
 
             # Render everything
             self.render()
+            
         
         if self.log_name is not None:
             self.logger.close()
 
-        return self.score_team1, self.score_team2
+        avg_reward = total_rewards / (ENV_PARAMS.NUMBER_OF_PLAYERS * 2 * ENV_PARAMS.FPS * ENV_PARAMS.GAME_DURATION)
+
+        return self.score_team1, self.score_team2, avg_reward
 
 
 
