@@ -9,10 +9,12 @@ from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperpa
 import multiprocessing
 import time
 import pygame
+import logging as log
 from tabulate import tabulate
+import torch
 
 pygame.init()
-
+print("cuda" if torch.cuda.is_available() else "cpu")
 
 def run_game(model, filename):
     filename = format_log_file(filename)
@@ -51,7 +53,7 @@ def replay_game():
 
     pygame.quit()
 
-def train():
+def train_PPO():
     ENV_PARAMS = EnvironmentHyperparameters()
     AI_PARAMS = AIHyperparameters()
     start_time = time.time()
@@ -59,29 +61,26 @@ def train():
     
     model = DQNAgent()
     scores = []
-
-    for epoch in tqdm(range(ENV_PARAMS.EPOCHS)):
-        if epoch == AI_PARAMS.stage2:
-            AI_PARAMS.DISTANCE_REWARD_BALL = AI_PARAMS.DISTANCE_REWARD_BALL_matrix[1]
-            AI_PARAMS.DISTANCE_REWARD_GOAL = AI_PARAMS.DISTANCE_REWARD_GOAL_matrix[1]
-        elif epoch == AI_PARAMS.stage3:
-            AI_PARAMS.DISTANCE_REWARD_BALL = AI_PARAMS.DISTANCE_REWARD_BALL_matrix[2]
-            AI_PARAMS.DISTANCE_REWARD_GOAL = AI_PARAMS.DISTANCE_REWARD_GOAL_matrix[2]
-
+    
+    for epoch in tqdm(range(ENV_PARAMS.EPOCHS), desc="Training DQN"):
+        # Adjust reward parameters based on training stage
         if epoch % ENV_PARAMS.log_interval == 0:
             filename = f"{ENV_PARAMS.log_name}_{epoch}"
         else:
             filename = None
-
+        AI_PARAMS.DISTANCE_REWARD_BALL = AI_PARAMS.DISTANCE_REWARD_BALL * 0.99
+    
+        # Collect experiences
         score1, score2, avg_reward = run_game(model, filename)
         scores.append((score1, score2))
 
+        # Log metrics
         print(f"Epoch: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward}")
+        log.info(f"Epoch: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward}")
         if epoch % ENV_PARAMS.log_interval == 0:
             model.save_model()
     
     pygame.quit()
-
     
     # Calculate total goals
     goals = sum(score[0] + score[1] for score in scores)
@@ -122,28 +121,15 @@ def train():
 def test():
     ENV_PARAMS = EnvironmentHyperparameters()
     start_time = time.time()
-    
-    processes = []
-    queue = multiprocessing.Queue()
 
-    for i in range(ENV_PARAMS.NUMBER_OF_GAMES):
-        p = multiprocessing.Process(target=run_game, args=(queue,))
-        processes.append(p)
-        p.start()
-
-
-    for p in processes:
-        p.join()
-
-
-    # Collect all scores
+    model = DQNAgent()
+    model.load_model(ENV_PARAMS.MODEL_NAME, test=True)
     scores = []
-    while not queue.empty():
-        scores.append(queue.get())
+    for i in range(ENV_PARAMS.EPOCHS):
+        score1, score2, reward  = run_game(model, filename=None)
+        scores.append((score1, score2))
 
     pygame.quit()
-    
-    print(scores)
 
     # Calculate total goals
     goals = sum(score[0] + score[1] for score in scores)
@@ -180,7 +166,6 @@ def test():
     # Print the table
     print(tabulate(data, headers=["Metric", "Time"], tablefmt="pretty"))
     print(tabulate(data2, headers=["Metric", "Value"], tablefmt="pretty"))
-
 
 def default():
     ENV_PARAMS = EnvironmentHyperparameters()
@@ -255,6 +240,6 @@ if __name__ == "__main__":
     elif ENV_PARAMS.MODE == "test":
         test()
     elif ENV_PARAMS.MODE == "train":
-        train()
+        train_PPO()
     else:
         default()

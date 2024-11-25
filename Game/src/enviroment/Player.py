@@ -98,7 +98,7 @@ class Player:
             self.arm_direction = 1  # 1 for forward, -1 for backward
             self.arm_min_angle = -40  # Minimum rotation angle for arms
             self.arm_max_angle = 40  # Maximum rotation angle for arms
-            self.arm_speed = 6        # Degrees per frame for arms
+            self.arm_speed = 10      # Degrees per frame for arms
 
             self.left_arm_angle = 0
             self.right_arm_angle = 0
@@ -109,7 +109,7 @@ class Player:
             self.right_leg_size = 0
             self.leg_min_size = -20  # Minimum stretch value for legs
             self.leg_max_size = 20  # Maximum stretch value for legs
-            self.leg_speed = 3        # Units per frame for legs
+            self.leg_speed =  5       # Units per frame for legs
             self.leg_angle = 0
 
             # Constants to tweak limb positions relative to the body

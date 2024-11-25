@@ -452,17 +452,17 @@ class Game:
             next_states = self.state_parser.parse_state(self.players, self.ball)
             for i, state in enumerate(states):
                 reward = rewards[i]
-                done = not running
+                done = not running or goal1 or goal2
                 model.remember(state, actions[i], reward, next_states[i], done)
-                model.replay()
                 total_rewards += abs(reward)
+            model.replay()
 
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer)
 
             # Render everything
             self.render()
-            
+
         
         if self.log_name is not None:
             self.logger.close()

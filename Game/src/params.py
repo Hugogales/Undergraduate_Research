@@ -15,11 +15,9 @@ class AIHyperparameters:
         self.stage2 = 10
         self.stage3 = 30
 
-        self.DISTANCE_REWARD_BALL_matrix = [10, 5, 1]
-        self.DISTANCE_REWARD_GOAL_matrix = [1, 5, 10]
 
-        self.DISTANCE_REWARD_BALL = 10
-        self.DISTANCE_REWARD_GOAL = 1
+        self.DISTANCE_REWARD_BALL = 50
+        self.DISTANCE_REWARD_GOAL = 100
         self.GOAL_REWARD = 100
 
         self.STATE_SIZE = 8 * self._env.NUMBER_OF_PLAYERS + 4
@@ -27,11 +25,11 @@ class AIHyperparameters:
 
         self.gamma = 0.994 # discount rate
         self.learning_rate = 0.001
-        self.batch_size = 32
+        self.batch_size = 64
 
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.9999
+        self.epsilon_decay = 0.9995
 
         self.target_update_freq = 1000
 
@@ -58,13 +56,14 @@ class EnvironmentHyperparameters:
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
-            self.FPS = 60
+            self.FPS = 30
             self.NUMBER_OF_PLAYERS = 1
             self.GAME_DURATION = 30 #5* 60  # 5 minutes
             self.RENDER = True
+            self.CAP_FPS = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "game_number_350"
+            self.FILE_NAME = "game_number_50"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -73,12 +72,13 @@ class EnvironmentHyperparameters:
             self.GAME_DURATION = 0
 
         else: # train or test
+            self.MODEL_NAME = "PPO"
             self.log_name = "game_number"
             self.log_interval = 5
             self.NUMBER_OF_GAMES = 1
-            self.FPS = 60
+            self.FPS = 30
             self.NUMBER_OF_PLAYERS = 1
-            self.GAME_DURATION = 60 
+            self.GAME_DURATION = 60
             self.EPOCHS = 100
 
         # Screen dimensions
@@ -87,16 +87,16 @@ class EnvironmentHyperparameters:
 
         # Player properties
         self.PLAYER_RADIUS = 20
-        self.PLAYER_SPEED = 5
+        self.PLAYER_SPEED = 9
         self.PLAYER_HEIGHT = self.PLAYER_RADIUS * 2  # Diameter
-        self.PLAYER_POWER = 1 # player vs player collision power 
+        self.PLAYER_POWER = 2 # player vs player collision power 
 
         # Ball properties
         self.BALL_RADIUS = 12 
         self.BALL_FRICTION = 0.95
         self.BALL_MAX_SPEED = 13
         self.BALL_HEIGHT = self.BALL_RADIUS * 2  # Diameter
-        self.BALL_POWER = 35 # player vs ball collision power
+        self.BALL_POWER =  35  # player vs ball collision power
 
         # Goal properties
         self.GOAL_WIDTH = 0.05 * self.WIDTH  # 5% of the screen width (65 pixels)
@@ -187,8 +187,8 @@ class VisualHyperparametters:
         self.TITLE = "2D Soccer Game"
 
         # options : blue, red, green, White
-        self.TEAM_1_COLOR = "blue"
-        self.TEAM_2_COLOR = "green"
+        self.TEAM_1_COLOR = "Blue"
+        self.TEAM_2_COLOR = "Green"
 
         self.WHITE = (255, 255, 255)
         self.BLUE = (0, 0, 255)     # Player 1 color
