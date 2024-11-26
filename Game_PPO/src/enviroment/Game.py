@@ -66,8 +66,11 @@ class Game:
         self.ball_hits = 0
 
         # Initialize Ball
+        random_x = random.random() * 5 - 2.5
+        random_y = random.random() * 5 - 2.5
+
         self.ball = Ball(
-            position=[ENV_PARAMS.WIDTH // 2, ENV_PARAMS.HEIGHT // 2],
+            position=[ENV_PARAMS.WIDTH // 2 + random_y, ENV_PARAMS.HEIGHT // 2 + random_x],
         )
 
         # Initialize Goals (only central part with inner boundaries)
@@ -157,8 +160,8 @@ class Game:
                 direction_y = (ball.position[1] - player.position[1]) / distance
 
             # Adjust ball position to prevent sticking
-            ball.position[0] += direction_x * overlap
-            ball.position[1] += direction_y * overlap
+            ball.position[0] += direction_x * 2*overlap
+            ball.position[1] += direction_y * 2*overlap
 
             # Calculate relative velocity
             relative_velocity_x = ball.velocity[0] - player.velocity[0]
@@ -392,7 +395,7 @@ class Game:
             goal1, goal2 = self.check_goals()
 
             if self.log_name is not None:
-                self.logger.log_state(self.players, self.ball, self.timer)
+                self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
 
             # Render everything
             self.render()
@@ -424,6 +427,10 @@ class Game:
             # Get the current state
             state = states[current_state_index]
             self.timer = state['time']
+            if "score" in state:
+                score = state['score']
+                self.score_team1 = score[0]
+                self.score_team2 = score[1]
 
             # Update Players
             for player, player_state in zip(self.players, state['players']):
@@ -473,15 +480,15 @@ class Game:
             self.randomize_players = False
             self.reset_game()
             self.randomize_players = True
-        elif AI_PARAMS.current_stage == 3: # both teams play
-            team_playing = [1,2]
-            self.randomize_players = False
-            self.reset_game()
-        elif AI_PARAMS.current_stage == 4: # both teams play radomn locations
+        elif AI_PARAMS.current_stage == 3: # both teams play radomn locations
             team_playing = [1,2]
             self.randomize_players = False
             self.reset_game()
             self.randomize_players = True
+        elif AI_PARAMS.current_stage == 4: # both teams play radomn locations
+            team_playing = [1,2]
+            self.randomize_players = False
+            self.reset_game()
 
         for player in self.players:
             memories.append(Memory())
@@ -540,7 +547,7 @@ class Game:
                 total_rewards[i] += reward
 
             if self.log_name is not None:
-                self.logger.log_state(self.players, self.ball, self.timer)
+                self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
 
             # Render everything
             self.render()

@@ -5,7 +5,7 @@ from AI.randmodel import RandomModel
 from AI.PPO import PPOAgent
 import json
 from functions.Logger import Logger, set_parameters
-from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters
+from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters, print_hyper_params
 import multiprocessing
 import time
 import pygame
@@ -60,6 +60,7 @@ def train_PPO():
     start_time = time.time()
     pygame.init()
     
+
     model = PPOAgent()
     if ENV_PARAMS.Load_model:
         model.load_model(ENV_PARAMS.Load_model)
@@ -84,6 +85,7 @@ def train_PPO():
         # Adjust reward parameters based on training stage
         if epoch % ENV_PARAMS.log_interval == 0:
             filename = f"{ENV_PARAMS.log_name}_{epoch}"
+            print_hyper_params()
         else:
             filename = None
         

@@ -55,17 +55,17 @@ class Ball:
         else:
             # Bouncing off the play area walls
             if new_x <= ENV_PARAMS.PLAY_AREA_LEFT + self.radius:
-                new_x = ENV_PARAMS.PLAY_AREA_LEFT + self.radius
+                new_x = ENV_PARAMS.PLAY_AREA_LEFT + 2 *self.radius
                 self.velocity[0] = -self.velocity[0]
             elif new_x >= ENV_PARAMS.PLAY_AREA_RIGHT - self.radius:
-                new_x = ENV_PARAMS.PLAY_AREA_RIGHT - self.radius
+                new_x = ENV_PARAMS.PLAY_AREA_RIGHT -  2 * self.radius
                 self.velocity[0] = -self.velocity[0]
 
             if new_y <= self.radius:
                 new_y = self.radius
                 self.velocity[1] = -self.velocity[1]
             elif new_y >= ENV_PARAMS.HEIGHT - self.radius:
-                new_y = ENV_PARAMS.HEIGHT - self.radius
+                new_y = ENV_PARAMS.HEIGHT - 2* self.radius
                 self.velocity[1] = -self.velocity[1]
 
             # Restrict vertical movement within the entire screen
