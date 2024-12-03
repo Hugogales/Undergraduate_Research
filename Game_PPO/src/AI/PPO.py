@@ -48,6 +48,9 @@ class PPOAgent:
         self.max_grad_norm = AI_PARAMS.max_grad_norm
         self.c_value = AI_PARAMS.c_value
         self.lam = AI_PARAMS.lam
+        self.mini_batch_size = AI_PARAMS.batch_size
+        self.min_learning_rate = AI_PARAMS.min_learning_rate
+        self.episodes = AI_PARAMS.episodes
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -57,10 +60,19 @@ class PPOAgent:
         self.policy_old.load_state_dict(self.policy.state_dict())
 
         # Optimizer
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate)
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.learning_rate, weight_decay=1e-5)
+        self.scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda=self.lr_lambda)
 
         # Loss function
         self.MseLoss = nn.MSELoss()
+
+    def lr_lambda(self, epoch):
+        initial_lr = self.learning_rate
+        final_lr = self.min_learning_rate
+        total_epochs = self.episodes
+        lr = final_lr + (initial_lr - final_lr) * (1 - epoch / total_epochs)
+        return max(lr / initial_lr, final_lr / initial_lr)
+
 
     def _build_model(self):
         return ActorCriticNetwork(self.state_size, self.action_size)
@@ -89,15 +101,24 @@ class PPOAgent:
         :return: The movement input as a list.
         """
         action_mapping = {
-            0: [1, 0, 0, 0],  # Up
-            1: [0, 1, 0, 0],  # Down
-            2: [0, 0, 1, 0],  # Left
-            3: [0, 0, 0, 1],  # Right
-            4: [1, 0, 1, 0],  # Up-Left
-            5: [1, 0, 0, 1],  # Up-Right
-            6: [0, 1, 1, 0],  # Down-Left
-            7: [0, 1, 0, 1],  # Down-Right
-            8: [0, 0, 0, 0]   # No movement
+            0: [1, 0, 0, 0, 0],  # Up - drible
+            1: [0, 1, 0, 0, 0],  # Down - drible
+            2: [0, 0, 1, 0, 0],  # Left - drible
+            3: [0, 0, 0, 1, 0],  # Right - drible
+            4: [1, 0, 1, 0, 0],  # Up-Left - drible
+            5: [1, 0, 0, 1, 0],  # Up-Right - drible
+            6: [0, 1, 1, 0, 0],  # Down-Left - drible
+            7: [0, 1, 0, 1, 0],  # Down-Right - drible
+            8: [0, 0, 0, 0, 0],  # No movement - drible
+            9: [1, 0, 0, 0, 1],  # Up - shoot
+            10: [0, 1, 0, 0, 1],  # Down - shoot
+            11: [0, 0, 1, 0, 1],  # Left - shoot
+            12: [0, 0, 0, 1, 1],  # Right - shoot
+            13: [1, 0, 1, 0, 1],  # Up-Left - shoot
+            14: [1, 0, 0, 1, 1],  # Up-Right - shoot
+            15: [0, 1, 1, 0, 1],  # Down-Left - shoot
+            16: [0, 1, 0, 1, 1],  # Down-Right - shoot
+            17: [0, 0, 0, 0, 1]  # No movement - shoot
         }
         return action_mapping.get(action, [0, 0, 0, 0])
 
@@ -140,7 +161,7 @@ class PPOAgent:
             # Clear memory after processing
             memory.clear()
 
-        # Concatenate experiences from both agents
+        # Concatenate experiences from all agents
         states = torch.cat(states, dim=0)
         actions = torch.cat(actions, dim=0)
         log_probs = torch.cat(log_probs, dim=0)
@@ -150,34 +171,95 @@ class PPOAgent:
         # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
-        # PPO policy update
+        # Shuffle the data
+        dataset_size = states.size(0)
+        indices = torch.randperm(dataset_size)
+        states = states[indices]
+        actions = actions[indices]
+        log_probs = log_probs[indices]
+        returns = returns[indices]
+        advantages = advantages[indices]
+
+        # Define mini-batch size
+        mini_batch_size = self.mini_batch_size  # e.g., 64
+        num_mini_batches = dataset_size // mini_batch_size
+
+        # PPO policy update with mini-batching
         for _ in range(self.K_epochs):
-            # Get action probabilities and1 state values from the policy network
-            action_probs, state_values_new = self.policy(states)
-            dist = torch.distributions.Categorical(action_probs)
-            action_log_probs = dist.log_prob(actions)
-            dist_entropy = dist.entropy()
+            for i in range(num_mini_batches):
+                # Define the start and end of the mini-batch
+                start = i * mini_batch_size
+                end = start + mini_batch_size
 
-            # Calculate the ratios
-            ratios = torch.exp(action_log_probs - log_probs)
+                # Slice the mini-batch
+                mini_states = states[start:end]
+                mini_actions = actions[start:end]
+                mini_log_probs = log_probs[start:end]
+                mini_returns = returns[start:end]
+                mini_advantages = advantages[start:end]
 
-            # Calculate surrogate losses
-            surr1 = ratios * advantages
-            surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * advantages
+                # Forward pass
+                action_probs, state_values_new = self.policy(mini_states)
+                dist = torch.distributions.Categorical(action_probs)
+                action_log_probs = dist.log_prob(mini_actions)
+                dist_entropy = dist.entropy()
 
-            # Calculate loss
-            loss = -torch.min(surr1, surr2).mean() + \
-                   self.c_value * self.MseLoss(state_values_new.squeeze(), returns) - \
-                   self.c_entropy * dist_entropy.mean()
+                # Calculate the ratios
+                ratios = torch.exp(action_log_probs - mini_log_probs)
 
-            # Backward pass and optimization
-            self.optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
-            self.optimizer.step()
+                # Calculate surrogate losses
+                surr1 = ratios * mini_advantages
+                surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * mini_advantages
 
+                # Calculate loss
+                loss = -torch.min(surr1, surr2).mean() + \
+                    self.c_value * self.MseLoss(state_values_new.squeeze(), mini_returns) - \
+                    self.c_entropy * dist_entropy.mean()
+
+                # Backward pass and optimization
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
+                self.optimizer.step()
+
+            # Handle any remaining data not fitting into mini-batches
+            remainder = dataset_size % mini_batch_size
+            if remainder != 0:
+                start = num_mini_batches * mini_batch_size
+                mini_states = states[start:]
+                mini_actions = actions[start:]
+                mini_log_probs = log_probs[start:]
+                mini_returns = returns[start:]
+                mini_advantages = advantages[start:]
+
+                # Forward pass
+                action_probs, state_values_new = self.policy(mini_states)
+                dist = torch.distributions.Categorical(action_probs)
+                action_log_probs = dist.log_prob(mini_actions)
+                dist_entropy = dist.entropy()
+
+                # Calculate the ratios
+                ratios = torch.exp(action_log_probs - mini_log_probs)
+
+                # Calculate surrogate losses
+                surr1 = ratios * mini_advantages
+                surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * mini_advantages
+
+                # Calculate loss
+                loss = -torch.min(surr1, surr2).mean() + \
+                    self.c_value * self.MseLoss(state_values_new.squeeze(), mini_returns) - \
+                    self.c_entropy * dist_entropy.mean()
+
+                # Backward pass and optimization
+                self.optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
+                self.optimizer.step()
+        
         # Update old policy parameters with new policy parameters
         self.policy_old.load_state_dict(self.policy.state_dict())
+        self.scheduler.step()
+
 
     def compute_gae(self, rewards, dones, values):
         """
@@ -203,7 +285,6 @@ class PPOAgent:
         advantages = np.array(advantages)
         returns = advantages + values
         return torch.FloatTensor(returns).to(self.device), torch.FloatTensor(advantages).to(self.device)
-        
 
     def save_model(self, model_name="PPO_model_giant"):
         path = f"files/Models/{model_name}.pth"

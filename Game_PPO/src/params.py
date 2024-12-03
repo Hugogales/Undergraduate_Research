@@ -11,32 +11,45 @@ class AIHyperparameters:
         ## rewards
         self._env = EnvironmentHyperparameters()
 
+        self.episodes = 100000
 
-        self.PLAYER_TO_BALL_REWARD_COEFF = 0.002
-        self.BALL_TO_GOAL_REWARD_COEFF = 0.15# expected max is 1 when bal
-        self.GOAL_REWARD = 300
+        self.PLAYER_TO_BALL_REWARD_COEFF = 0.01
+        self.BALL_TO_GOAL_REWARD_COEFF = 0.2# expected max is 1 when bal
+        self.GOAL_REWARD = 150
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
-        self.ACTION_SIZE = 9
+        self.ACTION_SIZE = 18
 
-        self.gamma = 0.98 # discount rate
-        self.learning_rate = 1.5e-4
-        self.batch_size = 64
+        self.learning_rate = 1.5e-4 
+        self.min_learning_rate = 4e-5
+
+        self.gamma = 0.975 # discount rate
+        self.batch_size = 128
         self.c_entropy = 0.025
         self.temperature = 1
         self.max_grad_norm = 2.5
-        self.lam = 0.965
-        self.c_value = 0.5
+        self.lam = 0.965    
+        self.c_value = 0.50
 
-        self.epsilon_clip = 0.15
-        self.K_epochs = 7
+        self.epsilon_clip = 0.2
+        self.K_epochs = 10
 
         self.current_stage = 1
-        self.stage1_steps = 6000 # one team plays 
-        self.stage2_steps = 8000 # one team plays radomn locations
-        self.stage3_steps = 8000 # both teams play 
-        self.stage4_steps = 50000 # both teams play radomn locations
+        self.stage1_steps = 15000 # one team plays with ball in front of them in goal
+        self.stage2_steps = 10000 # one team plays with ball in front of them in goal but players are random
+        self.stage3_steps = 10000 # one team plays (typical positions)
+        self.stage4_steps = 10000 # one team plays radomn locations 
+        self.stage5_steps = 10000 # both teams play random locatoin
+        self.stage6_steps = 50000 # both teams play 
+
+        self.stage1_time = 30
+        self.stage2_time = 45
+        self.stage3_time = 45
+        self.stage4_time = 45
+        self.stage5_time = 60
+        self.stage6_time = 75
+
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -53,18 +66,18 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay
-        self.MODE = "train" # train or test
+        self.MODE = "play" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
-            self.FPS = 16
-            self.NUMBER_OF_PLAYERS = 3
-            self.GAME_DURATION = 20 #5* 60  # 5 minutes
+            self.FPS = 32
+            self.NUMBER_OF_PLAYERS = 2
+            self.GAME_DURATION = 40 #5* 60  # 5 minutes
             self.RENDER = True
             self.CAP_FPS = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "PPO_v6_game_31250"
+            self.FILE_NAME = "PPO_v11_3_game_6000"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -75,19 +88,21 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         else: # train or test
-            self.MODEL_NAME = "PPO_v7"
+            self.MODEL_NAME = "PPO_v12_0"
             self.Load_model = None
-            self.log_name = "PPO_v7_game"
-            self.log_interval = 300
-            self.NUMBER_OF_GAMES = 1
-            self.FPS = 16
+            self.log_name = "PPO_v12_0_game"
+            self.log_interval = 3000
+            self.NUMBER_OF_GAMES = 4
+            self.FPS = 32
             self.NUMBER_OF_PLAYERS = 2
-            self.GAME_DURATION = 60 
-            self.EPOCHS = 50000
-            self.RENDER = False
+            self.GAME_DURATION = 30 
+            self.RENDER = True
             self.CAP_FPS = False
 
         self.RANDOMIZE_PLAYERS = False
+        self.SIMPLE_GAME = True
+
+        self.AGENT_DECISION_RATE =  8 # Number of frames between agent decisions
 
         # Screen dimensions
         self.WIDTH = 1300  # Increased width for a wider field
@@ -95,16 +110,19 @@ class EnvironmentHyperparameters:
 
         # Player properties
         self.PLAYER_RADIUS = 17
-        self.PLAYER_SPEED = 15
+        self.PLAYER_SPEED = 9
         self.PLAYER_HEIGHT = self.PLAYER_RADIUS * 2  # Diameter
         self.PLAYER_POWER = 2 # player vs player collision power 
 
         # Ball properties
         self.BALL_RADIUS = 9
-        self.BALL_FRICTION = 0.94
-        self.BALL_MAX_SPEED = 25
+        self.BALL_FRICTION = 0.96
+        self.BALL_MAX_SPEED = 30
         self.BALL_HEIGHT = self.BALL_RADIUS * 2  # Diameter
-        self.BALL_POWER =  52  # player vs ball collision power
+        self.BALL_POWER =  0.4# player vs ball collision power
+
+        self.KICK_POWER = 1.25 # player vs ball collision power
+        self.DRIBBLE_POWER = 0.4
 
         # Goal properties
         self.GOAL_WIDTH = 0.05 * self.WIDTH  # 5% of the screen width (65 pixels)

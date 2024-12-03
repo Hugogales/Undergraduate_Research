@@ -22,7 +22,8 @@ class Player:
         up_key=None,
         down_key=None,
         left_key=None,
-        right_key=None
+        right_key=None,
+        shoot_key=None
     ):
 
         """
@@ -55,11 +56,17 @@ class Player:
         else:
             self.left_key = right_key
             self.right_key = left_key
+        
+        self.shoot_key = shoot_key
 
         # Player attributes
         self.radius = ENV_PARAMS.PLAYER_RADIUS
         self.speed = ENV_PARAMS.PLAYER_SPEED
         self.velocity = [0, 0]  # (vx, vy)
+
+        self.power = ENV_PARAMS.DRIBBLE_POWER
+        self.dribble_power = ENV_PARAMS.DRIBBLE_POWER
+        self.kick_power = ENV_PARAMS.KICK_POWER
 
         # Animation and Direction Attributes
 
@@ -99,7 +106,7 @@ class Player:
             self.arm_direction = 1  # 1 for forward, -1 for backward
             self.arm_min_angle = -40  # Minimum rotation angle for arms
             self.arm_max_angle = 40  # Maximum rotation angle for arms
-            self.arm_speed = 19     # Degrees per frame for arms
+            self.arm_speed = 9    # Degrees per frame for arms
 
             self.left_arm_angle = 0
             self.right_arm_angle = 0
@@ -110,7 +117,7 @@ class Player:
             self.right_leg_size = 0
             self.leg_min_size = -20  # Minimum stretch value for legs
             self.leg_max_size = 20  # Maximum stretch value for legs
-            self.leg_speed =  9      # Units per frame for legs
+            self.leg_speed =  4.5     # Units per frame for legs
             self.leg_angle = 0
 
             # Constants to tweak limb positions relative to the body
@@ -134,7 +141,8 @@ class Player:
             1 if keys[self.up_key] else 0,
             1 if keys[self.down_key] else 0,
             1 if keys[self.left_key] else 0,
-            1 if keys[self.right_key] else 0]
+            1 if keys[self.right_key] else 0,
+            1 if keys[self.shoot_key] else 0]
             
         return self.move(arr)
        
@@ -165,6 +173,10 @@ class Player:
                 vx -= self.speed
             if arr[2] == 1: # left
                 vx += self.speed
+        if arr[4] == 1: # shoot
+            self.power = self.kick_power
+        else:
+            self.power = self.dribble_power
 
                 # Normalize velocity to maintain constant speed
         if vx != 0 or vy != 0:

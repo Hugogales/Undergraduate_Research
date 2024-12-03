@@ -90,7 +90,6 @@ class Ball:
         Resets the ball's position to the original position and velocity.
         """
         self.position = self.orginal_position.copy()
-
         self.velocity = [0, 0]
 
     def draw(self, surface):
