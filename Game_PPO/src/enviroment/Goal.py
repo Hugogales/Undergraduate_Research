@@ -63,10 +63,10 @@ class Goal:
         # Ensure the entire ball is within the inner goal area
         if self.position[0] == 0:
             # Left goal: entire ball must be within inner goal boundaries
-            in_goal_x = (ball.position[0] + ball.radius) <= right and (ball.position[1] + 3*  ball.radius) >= top and (ball.position[1] - 3 *ball.radius) <= bottom
+            in_goal_x = (ball.position[0] + ball.radius) <= right and (ball.position[1] + 5*  ball.radius) >= top and (ball.position[1] - 5 *ball.radius) <= bottom
         else:
             # Right goal: entire ball must be within inner goal boundaries
-            in_goal_x = (ball.position[0] - ball.radius) >= left and (ball.position[1] + 3*  ball.radius) >= top and (ball.position[1] - 3 * ball.radius) <= bottom
+            in_goal_x = (ball.position[0] - ball.radius) >= left and (ball.position[1] + 5*  ball.radius) >= top and (ball.position[1] - 5 * ball.radius) <= bottom
 
         return in_goal_x 
        

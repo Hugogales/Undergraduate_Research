@@ -259,9 +259,12 @@ class Game:
             self.ball.velocity = [0, 0]
             x_rand = random.random() * 100 - 50
             y_rand = random.random() * 140 - 80
-            self.ball.position = [1.8* ENV_PARAMS.WIDTH // 2 + x_rand ,  ENV_PARAMS.HEIGHT // 2 + y_rand] 
+            x_rand, y_rand = 0, 0
+            self.ball.position = [1.2* ENV_PARAMS.WIDTH // 2 + x_rand ,  ENV_PARAMS.HEIGHT // 2 + y_rand] 
             for player in self.team_2:
-                player.position = [0,0]
+                # random position
+                player.position = [random.randint(ENV_PARAMS.PLAY_AREA_LEFT + player.radius, ENV_PARAMS.PLAY_AREA_RIGHT - player.radius),
+                                   random.randint(player.radius, ENV_PARAMS.HEIGHT - player.radius)]
                 player.velocity = [0,0]
             
             if self.randomize_players:
@@ -274,7 +277,7 @@ class Game:
             else:
                 for player in self.team_1:
                     player.reset()
-                    player.position = [player.position[0] * 4.6, player.position[1]]
+                    player.position = [player.position[0] * 2.6, player.position[1]]
                     player.velocity = [0, 0]
         elif self.randomize_players:
             # Reset the ball to a random position
@@ -512,38 +515,30 @@ class Game:
         memories = []
         total_ball_distance = 0
         self.ball_hits = 0
+        entropy_list = []
 
         team_playing = [1, 2]
-        if AI_PARAMS.current_stage == 1:  # only one team plays - simple
-            team_playing = [1]
+        if AI_PARAMS.current_stage == 1:  # only one team plays  - typical
+            team_playing = [random.choice([1,2])]
             self.randomize_players = False
-            self.is_simple = True
+            self.is_simple = False
             self.reset_game()
         elif AI_PARAMS.current_stage == 2:  # one team plays random locations
-            team_playing = [1]
+            team_playing = [random.choice([1,2])]
             self.randomize_players = True
-            self.is_simple = True
-            self.reset_game()
-        if AI_PARAMS.current_stage == 3:  # only one team plays - simple
-            team_playing = [1]
-            self.randomize_players = False
             self.is_simple = False
             self.reset_game()
-        elif AI_PARAMS.current_stage == 4:  # one team plays random locations
-            team_playing = [1]
+        if AI_PARAMS.current_stage == 3:  #  both teams play - random locations
+            team_playing = [1,2]
             self.randomize_players = True
+            self.is_simple = False
+            self.reset_game()
+        elif AI_PARAMS.current_stage == 4:  # both teams play - typical
+            team_playing = [1,2]
+            self.randomize_players = False
             self.is_simple = False
             self.reset_game() 
-        elif AI_PARAMS.current_stage == 5:  # both teams play random locations
-            team_playing = [1, 2]
-            self.randomize_players = True
-            self.is_simple = False
-            self.reset_game()
-        elif AI_PARAMS.current_stage == 6:  # both teams play normal locations
-            team_playing = [1, 2]
-            self.randomize_players = False
-            self.is_simple = False
-            self.reset_game()
+
 
         for player in self.players:
             memories.append(Memory())
@@ -593,11 +588,12 @@ class Game:
                         accumulated_rewards[i] = 0.0  # Reset accumulated reward
 
                     # Take a new action
-                    action, log_prob, state_value = model.select_action(state)
+                    action, log_prob, state_value, entropy = model.select_action(state)
                     last_actions[i] = action
                     last_log_probs[i] = log_prob
                     last_state_values[i] = state_value
                     last_move_inputs[i] = model._action_to_input(action)
+                    entropy_list.append(entropy)
 
                     # Append to memory
                     memories[i].states.append(state)
@@ -664,5 +660,6 @@ class Game:
             if self.players[i].team_id in team_playing:
                 filtered_memories.append(memories[i])
         
+        avg_entropy = sum(entropy_list) / len(entropy_list)
 
-        return self.score_team1, self.score_team2, avg_reward, total_ball_distance, self.ball_hits, filtered_memories, team_playing
+        return self.score_team1, self.score_team2, avg_reward, total_ball_distance, self.ball_hits, filtered_memories, team_playing, avg_entropy

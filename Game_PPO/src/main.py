@@ -8,6 +8,7 @@ from functions.Logger import Logger, set_parameters
 from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters, print_hyper_params
 import multiprocessing
 import time
+import math
 import pygame
 from tabulate import tabulate
 import torch
@@ -74,27 +75,17 @@ def train_PPO():
             AI_PARAMS.current_stage += 1
             stage_counter = 0
             ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage2_time
-            print("change to stage 2 - random locations - simple game")
+            print("change to stage 2 - random locations ")
         if AI_PARAMS.current_stage == 2 and stage_counter >= AI_PARAMS.stage2_steps:
             AI_PARAMS.current_stage += 1
             stage_counter = 0
             ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage3_time
-            print("change to stage 3 - one team plays - typical positions")
+            print("change to stage 3 - both team plays - random positions")
         if AI_PARAMS.current_stage == 3 and stage_counter >= AI_PARAMS.stage3_steps:
             AI_PARAMS.current_stage += 1
             stage_counter = 0
             ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage4_time
-            print("change to stage 4 - one team plays - random locations")
-        if AI_PARAMS.current_stage == 4 and stage_counter >= AI_PARAMS.stage4_steps:
-            AI_PARAMS.current_stage += 1
-            stage_counter = 0
-            ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage5_time
-            print("change to stage 5 - both teams play random locations ")
-        if AI_PARAMS.current_stage == 5 and stage_counter >= AI_PARAMS.stage5_steps:
-            AI_PARAMS.current_stage += 1
-            stage_counter = 0
-            ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage6_time
-            print("change to stage 6 - both teams play typical positions")
+            print("change to stage 4 - both teams plays - typical locations")
         stage_counter += 1
 
         # Adjust reward parameters based on training stage
@@ -105,15 +96,17 @@ def train_PPO():
             filename = None
         
         # Collect experiences
-        score1, score2, avg_reward, ball_dist,ball_hits, memories, team_playing = run_game(model, filename)
+        score1, score2, avg_reward, ball_dist,ball_hits, memories, team_playing, entropy = run_game(model, filename)
         scores.append((score1, score2))
 
 
         model.update(memories)
 
+        entropy_percent = entropy / math.log(AI_PARAMS.ACTION_SIZE)
+
         # Log metrics
-        print(f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, team_playing: {team_playing}")
-        for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, team_playing: {team_playing}"):
+        print(f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, team_playing: {team_playing}")
+        for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, team_playing: {team_playing}"):
             a=1
         if epoch % ENV_PARAMS.log_interval == 0:
             model.save_model(ENV_PARAMS.MODEL_NAME)

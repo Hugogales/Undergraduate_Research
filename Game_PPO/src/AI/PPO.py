@@ -9,20 +9,20 @@ class ActorCriticNetwork(nn.Module):
     def __init__(self, state_size, action_size):
         super(ActorCriticNetwork, self).__init__()
         self.common = nn.Sequential(
-            nn.Linear(state_size, 526),
+            nn.Linear(state_size, 768),
             nn.ReLU(),
-            nn.Linear(526, 526),
+            nn.Linear(768, 768),
             nn.ReLU(),
         )
         self.actor = nn.Sequential(
-            nn.Linear(526, 256),
+            nn.Linear(768, 384),
             nn.ReLU(),
-            nn.Linear(256, action_size),
+            nn.Linear(384, action_size),
         )
         self.critic = nn.Sequential(
-            nn.Linear(526, 256),
+            nn.Linear(768, 384),
             nn.ReLU(),
-            nn.Linear(256, 1)
+            nn.Linear(384, 1)
         )
        
         AI_PARAMS = AIHyperparameters()
@@ -85,13 +85,14 @@ class PPOAgent:
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             action_log_prob = dist.log_prob(action)
+            entropy = dist.entropy()
         except ValueError as e:
             print(e)
             print(f"state tensor: {state_tensor}")
             print(f"action_probs: {action_probs}")
             raise ValueError("Break")
 
-        return action.item(), action_log_prob.item(), state_value.item()
+        return action.item(), action_log_prob.item(), state_value.item(), entropy.item()
     
     def _action_to_input(self, action):
         """
@@ -253,7 +254,7 @@ class PPOAgent:
                 # Backward pass and optimization
                 self.optimizer.zero_grad()
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
+                #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
         
         # Update old policy parameters with new policy parameters
