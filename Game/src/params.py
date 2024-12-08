@@ -73,7 +73,7 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "PPO_v16_0_game_32500"
+            self.FILE_NAME = "PPO_v16_3_game_55000"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
