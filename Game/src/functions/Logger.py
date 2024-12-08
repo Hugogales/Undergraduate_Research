@@ -16,14 +16,16 @@ class Logger:
         params_dict = env_params.__dict__
         self.data['parameters'] = params_dict
 
-    def log_state(self, players, ball, timer):
+    def log_state(self, players, ball, timer, score):
+        goals1, goals2 = score
         state = {
             'time': timer,
             'players': [],
             'ball': {
                 'position': ball.position.copy(),
                 'velocity': ball.velocity.copy()
-            }
+            },
+            'score' : [goals1, goals2]
         }
         for player in players:
             player_state = {
