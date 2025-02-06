@@ -3,7 +3,27 @@ import numpy as np
 import torch.nn as nn
 import torch.optim as optim
 from params import AIHyperparameters
+import copy
 import os
+
+class Memory:
+    def __init__(self):
+        self.states = []
+        self.actions = []
+        self.log_probs = []
+        self.rewards = []
+        self.dones = []
+        self.state_values = []
+
+    def clear(self):
+        del self.states[:]
+        del self.actions[:]
+        del self.log_probs[:]
+        del self.rewards[:]
+        del self.dones[:]
+        del self.state_values[:]
+
+
 
 class ActorCriticNetwork(nn.Module):
     def __init__(self, state_size, action_size):
@@ -35,8 +55,11 @@ class ActorCriticNetwork(nn.Module):
         return action_probs, state_value
 
 class PPOAgent:
-    def __init__(self):
+    def __init__(self, mode="train"):
         AI_PARAMS = AIHyperparameters()
+
+        self.mode = "train"
+        self.memories = []
 
         self.state_size = AI_PARAMS.STATE_SIZE
         self.action_size = AI_PARAMS.ACTION_SIZE
@@ -123,12 +146,15 @@ class PPOAgent:
         }
         return action_mapping.get(action, [0, 0, 0, 0])
 
-    def update(self, memories):
+    def update(self):
         """
         Performs PPO update using experiences stored in the provided memories.
 
         :param memories: List of Memory instances (one for each agent)
         """
+        if self.mode != "train":
+            return
+
         # Combine experiences from all memories
         states = []
         actions = []
@@ -139,7 +165,7 @@ class PPOAgent:
         returns = []
         advantages = []
 
-        for memory in memories:
+        for memory in self.memories:
             # Convert lists to tensors
             old_states = torch.FloatTensor(memory.states).to(self.device)
             old_actions = torch.LongTensor(memory.actions).to(self.device)
@@ -271,6 +297,9 @@ class PPOAgent:
         :param values: Tensor of state values.
         :return: Tensors of returns and advantages.
         """
+        if self.mode != "train":
+            return
+        
         gamma = self.gamma
         advantages = []
         gae = 0
@@ -307,3 +336,42 @@ class PPOAgent:
             print(f"Model loaded from {path}")
         else:
             print(f"Model file {path} does not exist.")
+    
+    def memory_prep(self, number_of_agents):
+        if self.mode != "train":
+            return
+        
+        for memory in self.memories:
+            memory.clear()
+
+        self.memories = []
+        for _ in range(number_of_agents):
+            self.memories.append(Memory())
+
+    
+    def get_actions(self, states):
+        actions = []
+        entropies = []
+        for i, state in enumerate(states):
+            action, log_prob, state_value, entropy = self.select_action(state)
+            if self.mode == "train":
+                self.memories[i].states.append(state)
+                self.memories[i].actions.append(action)
+                self.memories[i].log_probs.append(log_prob)
+                self.memories[i].state_values.append(state_value)
+
+            actions.append(self._action_to_input(action))
+            entropies.append(entropy)
+        
+        return actions, entropies
+    
+    def store_rewards(self, rewards, done):
+        if self.mode != "train":
+            return
+
+        for i in range(len(rewards)):
+            self.memories[i].rewards.append(rewards[i])
+            self.memories[i].dones.append(done)
+        
+    def clone(self):
+        return copy.deepcopy(self)

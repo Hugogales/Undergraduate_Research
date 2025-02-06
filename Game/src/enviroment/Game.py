@@ -9,7 +9,6 @@ from enviroment.Goal import Goal
 from functions.Logger import Logger
 from AI.StateParser import StateParser
 from AI.RewardFunction import RewardFunction 
-from AI.Memory import Memory
 
 
 # Instantiate Environment Hyperparameters as a global constant
@@ -408,6 +407,7 @@ class Game:
                 if event.type == pygame.QUIT:
                     running = False
 
+
             self.simulation_time += self.delta_time
             self.timer = ENV_PARAMS.GAME_DURATION - self.simulation_time
 
@@ -435,7 +435,7 @@ class Game:
             # Check for goals
             goal1, goal2 = self.check_goals()
             reward = self.reward_function.calculate_rewards(goal1, goal2)
-            print(reward[0])
+
 
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
@@ -506,25 +506,29 @@ class Game:
 
             current_state_index += 1
 
-    def run(self, model):
+    def run(self, model1, model2):
         """
         Runs the main game loop.
         """
         running = True
         total_rewards = []
-        memories = []
         total_ball_distance = 0
         self.ball_hits = 0
         entropy_list = []
 
+        # rewards between action states
+        accumalated_rewards_team1 = [0] * len(self.team_1)
+        accumalated_rewards_team2 = [0] * len(self.team_2)
+        acumalated_dones = []
+
         team_playing = [1, 2]
         if AI_PARAMS.current_stage == 1:  # only one team plays  - typical
-            team_playing = [random.choice([1,2])]
+            team_playing = [1]
             self.randomize_players = False
             self.is_simple = False
             self.reset_game()
         elif AI_PARAMS.current_stage == 2:  # one team plays random locations
-            team_playing = [random.choice([1,2])]
+            team_playing = [1]
             self.randomize_players = True
             self.is_simple = False
             self.reset_game()
@@ -540,24 +544,16 @@ class Game:
             self.reset_game() 
 
 
-        for player in self.players:
-            memories.append(Memory())
-            total_rewards.append(0)
+        model1.memory_prep(len(self.team_1))
+        model2.memory_prep(len(self.team_2))
 
         # Initialize action update parameters
         game_fps = ENV_PARAMS.FPS
         action_update_interval = int(game_fps / ENV_PARAMS.AGENT_DECISION_RATE)
         frame_counter = 0
 
-        # Initialize last actions and related variables
-        last_actions = [None] * len(self.players)
-        last_log_probs = [None] * len(self.players)
-        last_state_values = [None] * len(self.players)
-        last_move_inputs = [None] * len(self.players)
-
-        # Initialize accumulated rewards and dones
-        accumulated_rewards = [0.0] * len(self.players)
-        last_dones = [False] * len(self.players)
+        current_actions_team1 = [[0,0,0,0,0]] * len(self.team_1) # do nothing for all players
+        current_actions_team2 = [[0,0,0,0,0]] * len(self.team_2) # do nothing for all players
 
         while running:
             if ENV_PARAMS.RENDER and ENV_PARAMS.CAP_FPS:
@@ -574,38 +570,28 @@ class Game:
                 running = False
 
             states = self.state_parser.parse_state()
+            states_team1 = states[:len(self.team_1)]
+            states_team2 = states[len(self.team_1):]
 
             # Agent decision-making
             if frame_counter % action_update_interval == 0 or not running:
                 # Update actions for all players
-                for i, (player, state) in enumerate(zip(self.players, states)):
-                    if player.team_id not in team_playing:
-                        continue
-                    # If it's not the first frame, store the accumulated reward and done
-                    if last_actions[i] is not None:
-                        memories[i].rewards.append(accumulated_rewards[i])
-                        memories[i].dones.append(last_dones[i])
-                        accumulated_rewards[i] = 0.0  # Reset accumulated reward
-
-                    # Take a new action
-                    action, log_prob, state_value, entropy = model.select_action(state)
-                    last_actions[i] = action
-                    last_log_probs[i] = log_prob
-                    last_state_values[i] = state_value
-                    last_move_inputs[i] = model._action_to_input(action)
-                    entropy_list.append(entropy)
-
-                    # Append to memory
-                    memories[i].states.append(state)
-                    memories[i].actions.append(action)
-                    memories[i].log_probs.append(log_prob)
-                    memories[i].state_values.append(state_value)
+                if 1 in team_playing:
+                    actions, entropys = model1.get_actions(states_team1)
+                    entropy_list.append(sum(entropys)/ len(entropys))
+                    current_actions_team1 = actions
+                if 2 in team_playing:
+                    actions, entropys= model2.get_actions(states_team2)
+                    entropy_list.append(sum(entropys)/ len(entropys))
+                    current_actions_team2 = actions
 
             # Handle players' movement
-            for i, player in enumerate(self.players):
-                if player.team_id not in team_playing:
-                    continue
-                move_input = last_move_inputs[i]
+            for i, player in enumerate(self.team_1):
+                move_input = current_actions_team1[i] 
+                player.move(move_input)
+
+            for i, player in enumerate(self.team_2):
+                move_input = current_actions_team2[i] 
                 player.move(move_input)
 
             # Update ball's movement
@@ -623,14 +609,25 @@ class Game:
 
             # Calculate rewards
             rewards = self.reward_function.calculate_rewards(goal1, goal2)
-            for i, state in enumerate(states):
-                if self.players[i].team_id not in team_playing:
-                    continue
-                reward = rewards[i]
-                done = not running or goal1 or goal2
-                accumulated_rewards[i] += reward  # Accumulate rewards
-                last_dones[i] = done  # Update last done status
-                total_rewards[i] += reward
+            accumalated_rewards_team1 = [a + b for a, b in zip(accumalated_rewards_team1, rewards[:len(self.team_1)])]
+            accumalated_rewards_team2 = [a + b for a, b in zip(accumalated_rewards_team2, rewards[len(self.team_1):])]  
+
+            done = not running or goal1 or goal2 # game finishes or scored
+            acumalated_dones.append(done)
+
+            if frame_counter % action_update_interval == 0 or not running:
+                done = any(acumalated_dones)
+                
+                if 1 in team_playing:  
+                    total_rewards.append(sum(accumalated_rewards_team1))
+                    model1.store_rewards(accumalated_rewards_team1, done)
+                    accumalated_rewards_team1 = [0] * len(self.team_1)
+                    acumalated_dones = []
+                if 2 in team_playing:
+                    model2.store_rewards(accumalated_rewards_team2, done)
+                    accumalated_rewards_team2 = [0] * len(self.team_2)
+                    acumalated_dones = []
+          
 
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
@@ -640,26 +637,11 @@ class Game:
 
             frame_counter += 1  # Increment frame counter
 
-        # After the game ends, ensure all accumulated rewards are stored
-        for i in range(len(self.players)):
-            if self.players[i].team_id not in team_playing:
-                continue
-            if last_actions[i] is not None:
-                # Append the final accumulated reward and done status
-                memories[i].rewards.append(accumulated_rewards[i])
-                memories[i].dones.append(last_dones[i])
-                accumulated_rewards[i] = 0.0  # Reset accumulated reward
-
         if self.log_name is not None:
             self.logger.close()
 
         avg_reward = 100 * sum(total_rewards) / (ENV_PARAMS.NUMBER_OF_PLAYERS * 2 * ENV_PARAMS.FPS * ENV_PARAMS.GAME_DURATION)
 
-        filtered_memories = []
-        for i in range(len(total_rewards)):
-            if self.players[i].team_id in team_playing:
-                filtered_memories.append(memories[i])
-        
         avg_entropy = sum(entropy_list) / len(entropy_list)
 
-        return self.score_team1, self.score_team2, avg_reward, total_ball_distance, self.ball_hits, filtered_memories, team_playing, avg_entropy
+        return self.score_team1, self.score_team2, avg_reward, total_ball_distance, self.ball_hits, team_playing, avg_entropy

@@ -11,7 +11,7 @@ class AIHyperparameters:
         ## rewards
         self._env = EnvironmentHyperparameters()
 
-        self.episodes = 100000
+        self.episodes = 1000000
 
         self.PLAYER_TO_BALL_REWARD_COEFF = 0.002
         self.BALL_TO_GOAL_REWARD_COEFF = 0.15# expected max is 1 when bal
@@ -21,30 +21,31 @@ class AIHyperparameters:
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
 
-        self.learning_rate = 8e-5 # 1.5
-        self.min_learning_rate = 5e-5
+        self.learning_rate = 3e-5 
+        self.min_learning_rate = 5e-6
 
         self.gamma = 0.98 # discount rate
-        self.batch_size = 2048  
-        self.c_entropy = 0.018
+        self.batch_size = 4096
+        self.c_entropy = 0.02
         self.temperature = 1
-        self.max_grad_norm = 5
+        self.max_grad_norm = 10
         self.lam = 0.965    
         self.c_value = 0.50
 
-        self.epsilon_clip = 0.15
-        self.K_epochs = 7
+        self.epsilon_clip = 0.12
+        self.K_epochs = 8
+        self.opposing_model_freeze_time = 2500
 
         self.current_stage = 1
-        self.stage1_steps = 15000 # one team plays (typical positions)
-        self.stage2_steps = 20000 # one team plays radomn locations 
-        self.stage3_steps = 10000 # both teams play random locatoin
-        self.stage4_steps = 50000 # both teams play 
+        self.stage1_steps = 30000 # one team plays (typical positions)
+        self.stage2_steps = 35000 # one team plays radomn locations 
+        self.stage3_steps = 30000 # both teams play random locatoin
+        self.stage4_steps = 1000000 # both teams play 
 
-        self.stage1_time = 30 
-        self.stage2_time = 30
-        self.stage3_time = 45
-        self.stage4_time = 75
+        self.stage1_time = 90 
+        self.stage2_time = 90
+        self.stage3_time = 100
+        self.stage4_time = 100
 
 
     def __new__(cls, *args, **kwargs):
@@ -67,13 +68,13 @@ class EnvironmentHyperparameters:
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 4
+            self.NUMBER_OF_PLAYERS = 1
             self.GAME_DURATION = 60 #5* 60  # 5 minutes
             self.RENDER = True
             self.CAP_FPS = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "PPO_v16_3_game_55000"
+            self.FILE_NAME = "PPO_v17_0_game_85000"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -84,9 +85,9 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         else: # train or test
-            self.MODEL_NAME = "PPO_v16_0"
-            self.Load_model = None
-            self.log_name = "PPO_v16_0_game"
+            self.MODEL_NAME = "PPO_v17_0"
+            self.Load_model = "PPO_v17_0"
+            self.log_name = "PPO_v17_dgx_game"
             self.log_interval = 2500
             self.NUMBER_OF_GAMES = 1
             self.FPS = 36
@@ -113,11 +114,11 @@ class EnvironmentHyperparameters:
         # Ball properties
         self.BALL_RADIUS = 8
         self.BALL_FRICTION = 0.96
-        self.BALL_MAX_SPEED = 30
+        self.BALL_MAX_SPEED = 34
         self.BALL_HEIGHT = self.BALL_RADIUS * 2  # Diameter
         self.BALL_POWER =  0.43 # player vs ball collision power
 
-        self.KICK_POWER = 1.35 # player vs ball collision power
+        self.KICK_POWER = 1.37 # player vs ball collision power
         self.DRIBBLE_POWER = 0.43
 
         # Goal properties
