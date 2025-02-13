@@ -11,30 +11,31 @@ class AIHyperparameters:
         ## rewards
         self._env = EnvironmentHyperparameters()
 
-        self.episodes = 1000000
+        self.episodes = 700000
 
         self.PLAYER_TO_BALL_REWARD_COEFF = 0.002
-        self.BALL_TO_GOAL_REWARD_COEFF = 0.15# expected max is 1 when bal
+        self.BALL_TO_GOAL_REWARD_COEFF = 0.4# expected max is 2 when bal
         self.GOAL_REWARD = 300
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
 
-        self.learning_rate = 3e-5 
-        self.min_learning_rate = 5e-6
+        self.learning_rate = 3e-4
+        self.min_learning_rate = 5e-5
 
         self.gamma = 0.98 # discount rate
-        self.batch_size = 4096
-        self.c_entropy = 0.02
+        self.batch_size = 2048
+        self.c_entropy = 0.01  # how much entropy is weighted
         self.temperature = 1
-        self.max_grad_norm = 10
-        self.lam = 0.965    
-        self.c_value = 0.50
+        self.max_grad_norm = 5
+        self.lam = 0.95 # GAE lambda
+        self.c_value = 0.50 # how much critic loss is weighted
+        self.TD_difference_N = 3
 
-        self.epsilon_clip = 0.12
-        self.K_epochs = 8
-        self.opposing_model_freeze_time = 2500
+        self.epsilon_clip = 0.10
+        self.K_epochs = 15
+        self.opposing_model_freeze_time = 5000
 
         self.current_stage = 1
         self.stage1_steps = 30000 # one team plays (typical positions)
@@ -42,10 +43,10 @@ class AIHyperparameters:
         self.stage3_steps = 30000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
-        self.stage1_time = 90 
-        self.stage2_time = 90
-        self.stage3_time = 100
-        self.stage4_time = 100
+        self.stage1_time = 60 
+        self.stage2_time = 60
+        self.stage3_time = 90
+        self.stage4_time = 90
 
 
     def __new__(cls, *args, **kwargs):
@@ -63,7 +64,7 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay
-        self.MODE = "replay" # train or test
+        self.MODE = "train" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
@@ -74,7 +75,7 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "PPO_v17_0_game_85000"
+            self.FILE_NAME = "PPO_v17_trans_1_game_15000"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -85,13 +86,14 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         else: # train or test
-            self.MODEL_NAME = "PPO_v17_0"
-            self.Load_model = "PPO_v17_0"
-            self.log_name = "PPO_v17_dgx_game"
+            self.MODEL_NAME = "PPO_v19"
+            self.Load_model = None
+            self.log_name = "PPO_v19"
+            self.model = "PPO_old"
             self.log_interval = 2500
-            self.NUMBER_OF_GAMES = 1
+            self.NUMBER_OF_GAMES = 12 
             self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 2
+            self.NUMBER_OF_PLAYERS = 3
             self.GAME_DURATION = 30 
             self.RENDER = False
             self.CAP_FPS = False

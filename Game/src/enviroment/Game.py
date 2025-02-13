@@ -506,7 +506,7 @@ class Game:
 
             current_state_index += 1
 
-    def run(self, model1, model2):
+    def run(self, model1, model2, current_stage):
         """
         Runs the main game loop.
         """
@@ -522,22 +522,22 @@ class Game:
         acumalated_dones = []
 
         team_playing = [1, 2]
-        if AI_PARAMS.current_stage == 1:  # only one team plays  - typical
+        if current_stage == 1:  # only one team plays  - typical
             team_playing = [1]
             self.randomize_players = False
             self.is_simple = False
             self.reset_game()
-        elif AI_PARAMS.current_stage == 2:  # one team plays random locations
+        elif current_stage == 2:  # one team plays random locations
             team_playing = [1]
             self.randomize_players = True
             self.is_simple = False
             self.reset_game()
-        if AI_PARAMS.current_stage == 3:  #  both teams play - random locations
+        if current_stage == 3:  #  both teams play - random locations
             team_playing = [1,2]
             self.randomize_players = True
             self.is_simple = False
             self.reset_game()
-        elif AI_PARAMS.current_stage == 4:  # both teams play - typical
+        elif current_stage == 4:  # both teams play - typical
             team_playing = [1,2]
             self.randomize_players = False
             self.is_simple = False

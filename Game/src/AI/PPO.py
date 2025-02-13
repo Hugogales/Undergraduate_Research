@@ -13,7 +13,7 @@ class Memory:
         self.log_probs = []
         self.rewards = []
         self.dones = []
-        self.state_values = []
+        self.action_state_values = []
 
     def clear(self):
         del self.states[:]
@@ -21,38 +21,60 @@ class Memory:
         del self.log_probs[:]
         del self.rewards[:]
         del self.dones[:]
-        del self.state_values[:]
-
+        del self.action_state_values[:]
 
 
 class ActorCriticNetwork(nn.Module):
     def __init__(self, state_size, action_size):
         super(ActorCriticNetwork, self).__init__()
-        self.common = nn.Sequential(
-            nn.Linear(state_size, 768),
-            nn.ReLU(),
-            nn.Linear(768, 768),
-            nn.ReLU(),
-        )
         self.actor = nn.Sequential(
-            nn.Linear(768, 384),
-            nn.ReLU(),
-            nn.Linear(384, action_size),
+            nn.Linear(state_size, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, action_size),
         )
         self.critic = nn.Sequential(
-            nn.Linear(768, 384),
-            nn.ReLU(),
-            nn.Linear(384, 1)
+            nn.Linear(state_size + action_size, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 1),
         )
        
         AI_PARAMS = AIHyperparameters()
         self.temperature = AI_PARAMS.temperature
 
+        print(f"params: {sum(p.numel() for p in self.parameters())}")
+
     def forward(self, x):
-        x = self.common(x)
         action_probs = torch.softmax(self.actor(x)/ self.temperature, dim=-1)
-        state_value = self.critic(x)
+        dist = torch.distributions.Categorical(action_probs)
+        action_idx = dist.sample()
+        action_one_hot = torch.zeros_like(action_probs)
+        action_one_hot.scatter_(-1, action_idx.unsqueeze(-1), 1)
+        critic_input = torch.cat([x, action_one_hot], dim=-1)
+        state_value = self.critic(critic_input)
         return action_probs, state_value
+    
+    def multi_agent_baseline(self, x):
+        with torch.no_grad():
+            batch_size = x.shape[0]
+            possible_actions = torch.eye(18).to(x.device)
+            possible_actions = possible_actions.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, 18, 18]
+            x_expanded = x.unsqueeze(1).expand(-1, 18, -1)  # [batch_size, 18, state_size]
+            critic_input = torch.cat([x_expanded, possible_actions], dim=-1) # [batch_size, 18, state_size + action_size]
+            state_values = self.critic(critic_input) # [batch_size, 18, 1]
+            state_values = state_values.squeeze(-1) # [batch_size, 18]
+            action_probs = torch.softmax(self.actor(x)/ self.temperature, dim=-1) # [batch_size, 18]
+            state_value = (state_values * action_probs).sum(dim=-1) # [batch_size]
+        return state_value
+
+
 
 class PPOAgent:
     def __init__(self, mode="train"):
@@ -74,6 +96,7 @@ class PPOAgent:
         self.mini_batch_size = AI_PARAMS.batch_size
         self.min_learning_rate = AI_PARAMS.min_learning_rate
         self.episodes = AI_PARAMS.episodes
+        self.td_dif_N = AI_PARAMS.TD_difference_N
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -104,7 +127,7 @@ class PPOAgent:
         try :
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():
-                action_probs, state_value = self.policy_old(state_tensor)
+                action_probs, action_state_value = self.policy_old(state_tensor)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             action_log_prob = dist.log_prob(action)
@@ -112,10 +135,10 @@ class PPOAgent:
         except ValueError as e:
             print(e)
             print(f"state tensor: {state_tensor}")
-            print(f"action_probs: {action_probs}")
+            peerint(f"action_probs: {action_probs}")
             raise ValueError("Break")
 
-        return action.item(), action_log_prob.item(), state_value.item(), entropy.item()
+        return action.item(), action_log_prob.item(), action_state_value.item(), entropy.item()
     
     def _action_to_input(self, action):
         """
@@ -161,8 +184,8 @@ class PPOAgent:
         log_probs = []
         rewards = []
         dones = []
-        state_values = []
-        returns = []
+        action_state_values = []
+        bootstrapped_returns = []
         advantages = []
 
         for memory in self.memories:
@@ -170,20 +193,24 @@ class PPOAgent:
             old_states = torch.FloatTensor(memory.states).to(self.device)
             old_actions = torch.LongTensor(memory.actions).to(self.device)
             old_log_probs = torch.FloatTensor(memory.log_probs).to(self.device)
-            state_values_tensor = torch.FloatTensor(memory.state_values).to(self.device).squeeze()
+            action_state_values_tensor = torch.FloatTensor(memory.action_state_values).to(self.device).squeeze()
 
             # Compute returns and advantages for this memory
             rewards = memory.rewards
             dones = memory.dones
-            returns_tensor, advantages_tensor = self.compute_gae(rewards, dones, state_values_tensor)
+            bootstrapped_returns_tensor = self.temporal_difference(rewards, dones, action_state_values_tensor)
+
+            # Compute advantages
+            multi_agent_baseline = self.policy_old.multi_agent_baseline(old_states) 
+            advantages_tensor = action_state_values_tensor - multi_agent_baseline
 
             # Append to the combined lists
             states.append(old_states)
             actions.append(old_actions)
             log_probs.append(old_log_probs)
-            state_values.append(state_values_tensor)
-            returns.append(returns_tensor)
+            action_state_values.append(action_state_values_tensor)
             advantages.append(advantages_tensor)
+            bootstrapped_returns.append(bootstrapped_returns_tensor)
 
             # Clear memory after processing
             memory.clear()
@@ -192,8 +219,8 @@ class PPOAgent:
         states = torch.cat(states, dim=0)
         actions = torch.cat(actions, dim=0)
         log_probs = torch.cat(log_probs, dim=0)
-        returns = torch.cat(returns, dim=0)
         advantages = torch.cat(advantages, dim=0)
+        bootstrapped_returns = torch.cat(bootstrapped_returns, dim=0)
 
         # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
@@ -204,7 +231,6 @@ class PPOAgent:
         states = states[indices]
         actions = actions[indices]
         log_probs = log_probs[indices]
-        returns = returns[indices]
         advantages = advantages[indices]
 
         # Define mini-batch size
@@ -222,7 +248,6 @@ class PPOAgent:
                 mini_states = states[start:end]
                 mini_actions = actions[start:end]
                 mini_log_probs = log_probs[start:end]
-                mini_returns = returns[start:end]
                 mini_advantages = advantages[start:end]
 
                 # Forward pass
@@ -239,9 +264,9 @@ class PPOAgent:
                 surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * mini_advantages
 
                 # Calculate loss
-                loss = -torch.min(surr1, surr2).mean() + \
-                    self.c_value * self.MseLoss(state_values_new.squeeze(), mini_returns) - \
-                    self.c_entropy * dist_entropy.mean()
+                actor_loss = -torch.min(surr1, surr2).mean()
+                critic_loss = self.MseLoss(state_values_new.squeeze(), mini_advantages) 
+                loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean()
 
                 # Backward pass and optimization
                 self.optimizer.zero_grad()
@@ -256,7 +281,6 @@ class PPOAgent:
                 mini_states = states[start:]
                 mini_actions = actions[start:]
                 mini_log_probs = log_probs[start:]
-                mini_returns = returns[start:]
                 mini_advantages = advantages[start:]
 
                 # Forward pass
@@ -271,16 +295,15 @@ class PPOAgent:
                 # Calculate surrogate losses
                 surr1 = ratios * mini_advantages
                 surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * mini_advantages
-
+                actor_loss = -torch.min(surr1, surr2).mean()
+                critic_loss = self.MseLoss(state_values_new.squeeze(), mini_advantages) 
+                loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean()
                 # Calculate loss
-                loss = -torch.min(surr1, surr2).mean() + \
-                    self.c_value * self.MseLoss(state_values_new.squeeze(), mini_returns) - \
-                    self.c_entropy * dist_entropy.mean()
 
                 # Backward pass and optimization
                 self.optimizer.zero_grad()
                 loss.backward()
-                #torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
+                torch.nn.utils.clip_grad_norm_(self.policy.parameters(), max_norm=self.max_grad_norm)
                 self.optimizer.step()
         
         # Update old policy parameters with new policy parameters
@@ -288,34 +311,53 @@ class PPOAgent:
         self.scheduler.step()
 
 
-    def compute_gae(self, rewards, dones, values):
+    
+    def temporal_difference(self, rewards, dones, action_state_values):
         """
-        Compute returns and advantages using GAE (Generalized Advantage Estimation).
-
-        :param rewards: List of rewards for an episode.
-        :param dones: List of done flags for an episode.
-        :param values: Tensor of state values.
-        :return: Tensors of returns and advantages.
+        Computes N-step returns (bootstrapped) for each time step, 
+        then returns a list/array that you can compare with predicted Q-values.
         """
-        if self.mode != "train":
-            return
-        
-        gamma = self.gamma
-        advantages = []
-        gae = 0
-        values = values.detach().cpu().numpy()
-        for i in reversed(range(len(rewards))):
-            if i == len(rewards) - 1:
-                next_value = 0 if dones[i] else values[i + 1]
-            else:
-                next_value = values[i + 1]
-            delta = rewards[i] + gamma * next_value * (1 - dones[i]) - values[i]
-            gae = delta + gamma * self.lam * (1 - dones[i]) * gae
-            advantages.insert(0, gae)
-        advantages = np.array(advantages)
-        returns = advantages + values
-        return torch.FloatTensor(returns).to(self.device), torch.FloatTensor(advantages).to(self.device)
-
+        with torch.no_grad():
+            N = self.td_dif_N
+            gamma = self.gamma
+            T = len(rewards)
+    
+            # Convert predicted Q-values to CPU if needed, for easy manipulation
+            # We'll convert back to CUDA after computation if necessary
+            action_state_values = action_state_values.detach().cpu().numpy()
+    
+            # Prepare an array for the N-step targets
+            bootstrapped_return = np.zeros_like(action_state_values, dtype=np.float32)
+    
+            for t in range(T):
+                G = 0.0
+                discount = 1.0
+    
+                # Accumulate discounted rewards for up to N steps or until 'done'
+                episode_ended = False
+                for i in range(N):
+                    idx = t + i
+                    if idx < T:
+                        G += discount * rewards[idx]
+                        discount *= gamma
+                        if dones[idx]:
+                            episode_ended = True
+                            break
+                    else:
+                        break
+    
+                # add the estimated state value at time step t+N if it's not the end of the episode
+                final_idx = t + N
+                if not episode_ended and final_idx < T and not dones[final_idx - 1]:
+                    G += discount * action_state_values[final_idx]
+    
+                bootstrapped_return[t] = G
+    
+            # Convert the bootstrapped_return back to a torch.Tensor on the same device
+            bootstrapped_return = torch.tensor(bootstrapped_return, dtype=torch.float32, device=self.device)
+    
+        return bootstrapped_return
+    
     def save_model(self, model_name="PPO_model_giant"):
         path = f"files/Models/{model_name}.pth"
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -353,12 +395,12 @@ class PPOAgent:
         actions = []
         entropies = []
         for i, state in enumerate(states):
-            action, log_prob, state_value, entropy = self.select_action(state)
+            action, log_prob, action_state_value, entropy = self.select_action(state)
             if self.mode == "train":
                 self.memories[i].states.append(state)
                 self.memories[i].actions.append(action)
                 self.memories[i].log_probs.append(log_prob)
-                self.memories[i].state_values.append(state_value)
+                self.memories[i].action_state_values.append(action_state_value)
 
             actions.append(self._action_to_input(action))
             entropies.append(entropy)
@@ -375,3 +417,8 @@ class PPOAgent:
         
     def clone(self):
         return copy.deepcopy(self)
+    
+    def assign_device(self, device):
+        self.device = device
+        self.policy.to(device)
+        self.policy_old.to(device)
