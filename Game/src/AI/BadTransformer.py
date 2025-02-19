@@ -170,9 +170,7 @@ class BadTransformerPPOAgent:
     def _build_model(self):
         return AttentionActorCriticNetwork(
             state_size=self.state_size,
-            action_size=self.action_size,
-            num_heads=4,        # Feel free to adjust
-            embedding_dim=128   # Feel free to adjust
+            action_size=self.action_size
         )
 
     # ---------------------------------------------------------------------------------

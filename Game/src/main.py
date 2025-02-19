@@ -5,6 +5,8 @@ from AI.randmodel import RandomModel
 from AI.OldPPO import OldPPOAgent
 from AI.BadTransformer import BadTransformerPPOAgent
 from AI.PPO import PPOAgent
+from AI.A2C import A2C
+#from AI.A3C import A3C
 import json
 from functions.Logger import Logger, set_parameters
 from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters, print_hyper_params
@@ -77,11 +79,11 @@ def train_PPO():
         train_model = PPOAgent(mode="train")
         competing_model = PPOAgent(mode="test")
     elif ENV_PARAMS.model == "A2C":
-        # to be implemented
-        pass
+        train_model = A2C(mode="train")
+        competing_model = A2C(mode="test")
     elif ENV_PARAMS.model == "A3C":
-        # to be implemented
-        pass
+        train_model = A3C(mode="train")
+        competing_model = A3C(mode="test")
     else:
         raise ValueError("Model not recognized")
     competing_model.policy.eval()
@@ -194,6 +196,17 @@ import math
 
 def run_single_game(args):
     (model, competing_model, current_stage, filename, gpu_id) = args
+    AI_PARAMS = AIHyperparameters()
+    ENV_PARAMS = EnvironmentHyperparameters()
+    if current_stage == 1:
+        ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage1_time
+    if current_stage== 2:
+        ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage2_time
+    if current_stage == 3:
+        ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage3_time
+    if current_stage == 4:
+        ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage4_time
+
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
     model.assign_device(device)
     competing_model.assign_device(device)
@@ -222,10 +235,11 @@ def train_PPO_parralel():
         train_model = PPOAgent(mode="train")
         competing_model = PPOAgent(mode="test")
     elif ENV_PARAMS.model == "A2C":
-        # to be implemented
-        pass
+        train_model = A2C(mode="train")
+        competing_model = A2C(mode="test")
     elif ENV_PARAMS.model == "A3C":
-        # to be implemented
+        train_model = A3C(mode="train")
+        competing_model = A3C(mode="test")
         pass
     else:
         raise ValueError("Model not recognized")
@@ -273,11 +287,12 @@ def train_PPO_parralel():
             if epoch % AI_PARAMS.opposing_model_freeze_time == 0:
                 competing_model.policy.load_state_dict(train_model.policy.state_dict())
                 competing_model.policy_old.load_state_dict(train_model.policy_old.state_dict())
-
+            
             if torch.cuda.is_available():
-                args_list = [(train_model, competing_model, AI_PARAMS.current_stage, filename, i % torch.cuda.device_count()) for i in range(num_games)]
+                args_list = [(train_model, competing_model, AI_PARAMS.current_stage, filename if i == 0 else None, i % torch.cuda.device_count()) for i in range(num_games)]
             else:
-                args_list = [(train_model, competing_model, AI_PARAMS.current_stage, filename, 0) for _ in range(num_games)]
+                args_list = [(train_model, competing_model, AI_PARAMS.current_stage, filename if i == 0 else None, 0) for i in range(num_games)]
+
 
             results = pool.map(run_single_game, args_list)
 
@@ -325,8 +340,6 @@ def train_PPO_parralel():
 
     pygame.quit()
 
-import cProfile
-
 if __name__ == "__main__":
     ENV_PARAMS = EnvironmentHyperparameters()
 
@@ -335,7 +348,7 @@ if __name__ == "__main__":
     elif ENV_PARAMS.MODE == "replay":
         replay_game()
     elif ENV_PARAMS.MODE == "train":
-        cProfile.run("train_PPO()", "profile1.log")    
+        train_PPO()
     elif ENV_PARAMS.MODE == "train_parallel":
         mp.set_start_method("spawn", force=True)
         train_PPO_parralel()

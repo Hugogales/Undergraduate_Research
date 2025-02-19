@@ -1,0 +1,63 @@
+\documentclass[12pt]{article}
+\usepackage[letterpaper,top=1in,bottom=1in,left=1.25in,right=1.25in]{geometry}
+\usepackage{times}       % Use Times or Times New Roman font
+\usepackage{setspace}    % For single spacing
+\usepackage{titlesec}    % For custom section headings
+\usepackage{footmisc}    % For footnotes
+
+\singlespacing
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{\baselineskip}
+
+\titleformat{\section}{\bfseries\fontsize{16}{19}\selectfont}{\thesection}{1em}{}
+\titlespacing{\section}{0pt}{2\baselineskip}{\baselineskip}
+\titleformat{\subsection}{\bfseries\fontsize{14}{17}\selectfont}{\thesubsection}{1em}{}
+\titlespacing{\subsection}{0pt}{2\baselineskip}{\baselineskip}
+\titleformat{\subsubsection}{\bfseries\fontsize{12}{14}\selectfont}{\thesubsubsection}{1em}{}
+\titlespacing{\subsubsection}{0pt}{2\baselineskip}{\baselineskip}
+
+\begin{document}
+
+\thispagestyle{empty} 
+
+\begin{center}
+    \vspace*{1.5in}
+    {\fontsize{18}{22}\selectfont \textbf{Enhancing Collaboration in Multi-Agent Environments with Attention-Based Actor-Critic Policies}}\\[2\baselineskip]
+
+    % Author info: 14 point, centered
+    {\fontsize{14}{17}\selectfont Hugo Garrido-Lestache\footnote{Primary Author}, Jeremy Kedziora\footnote{Advisor}}\\
+    {\fontsize{14}{17}\selectfont Department of Computer Science and Software Engineering}\\
+    {\fontsize{14}{17}\selectfont Milwaukee School of Engineering}\\
+    {\fontsize{14}{17}\selectfont Milwaukee, WI, 53202}\\
+    {\fontsize{14}{17}\selectfont \{garrido-lestacheh, kedziora\}@msoe.edu}\\[2\baselineskip]
+
+    {\bfseries \fontsize{16}{19}\selectfont Abstract}\\[1\baselineskip]
+
+    \parbox{0.85\textwidth}{
+        \fontsize{12}{14}\selectfont
+        Collaboration is essential in solving complex real-world problems,
+        as it enables tasks to be completed more efficiently and leverages the diverse perspectives of team members.
+        Multi-Agent Reinforcement Learning (MARL) can be utilized to model environments where agents must collaborate to achieve a common goal.
+        However, promoting collaboration in MARL is challenging due to the non-stationarity of the environment and the difficulty of learning an effective collaborative shared policy or individual policies.
+        Previous work has been done to use an attention mechanism in the critic of the Actor-Critic architecture to improve the learning of collaborative policies [1].
+        This attention mechanism allows the critic to select the relevant information from the other agents' observations promoting for better learning of the value function.
+        In this paper, we propose a new actor-critic architecture that additionally incorporates an attention mechanism in the actor to bring the same benefits to the policy learning.
+        To evaluate this architecture, the environment will be using is a simulation of a soccer game where agents must collaborate to outsmart the opposing team and score goals.
+        The results of this work will be compared to the current state-of-the-art in MARL as well as classical reinforcement learning algorithms to determine the effectiveness of the proposed architecture.
+    }
+\end{center}
+
+% After the title/abstract page, move to a new page for the main body
+\clearpage
+
+%---------------------------------------------------------------------
+% BODY: START PAGE NUMBERING AT 1
+%---------------------------------------------------------------------
+\setcounter{page}{1}
+
+\section{References}
+
+[1] Shariq Iqbal and Fei Sha, "Actor-Attention-Critic for Multi-Agent Reinforcement Learning," CoRR, vol. abs/1810.02912, 2018. Available: http://arxiv.org/abs/1810.02912
+
+\end{document}

@@ -11,35 +11,35 @@ class AIHyperparameters:
         ## rewards
         self._env = EnvironmentHyperparameters()
 
-        self.episodes = 700000
+        self.episodes = 100000
 
         self.PLAYER_TO_BALL_REWARD_COEFF = 0.002
-        self.BALL_TO_GOAL_REWARD_COEFF = 0.4# expected max is 2 when bal
+        self.BALL_TO_GOAL_REWARD_COEFF = 0.3# expected max is 2 when bal
         self.GOAL_REWARD = 300
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
 
-        self.learning_rate = 3e-4
-        self.min_learning_rate = 5e-5
+        self.learning_rate = 5e-5
+        self.min_learning_rate = 5e-6
 
         self.gamma = 0.98 # discount rate
-        self.batch_size = 2048
-        self.c_entropy = 0.01  # how much entropy is weighted
+        self.batch_size = 4096
+        self.c_entropy = 0.003# how much entropy is weighted
         self.temperature = 1
-        self.max_grad_norm = 5
+        self.max_grad_norm = 1000
         self.lam = 0.95 # GAE lambda
-        self.c_value = 0.50 # how much critic loss is weighted
-        self.TD_difference_N = 3
+        self.c_value = 1 #5 how much critic loss is weighted
+        self.TD_difference_N = 1
 
-        self.epsilon_clip = 0.10
-        self.K_epochs = 15
-        self.opposing_model_freeze_time = 5000
+        self.epsilon_clip = 0.15
+        self.K_epochs = 14
+        self.opposing_model_freeze_time = 2500
 
         self.current_stage = 1
-        self.stage1_steps = 30000 # one team plays (typical positions)
-        self.stage2_steps = 35000 # one team plays radomn locations 
+        self.stage1_steps = 1000 * 3 # one team plays (typical positions)
+        self.stage2_steps = 5000 * 3# one team plays radomn locations 
         self.stage3_steps = 30000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
@@ -64,7 +64,7 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay
-        self.MODE = "train" # train or test
+        self.MODE = "train_parallel" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
@@ -86,12 +86,16 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         else: # train or test
-            self.MODEL_NAME = "PPO_v19"
+            model = "PPO"
+            version = 20
+            sub_version = 3 
+
+            self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
             self.Load_model = None
-            self.log_name = "PPO_v19"
-            self.model = "PPO_old"
+            self.log_name = f"{model}_v{version}_sub{sub_version}_game"
+            self.model = "PPO"
             self.log_interval = 2500
-            self.NUMBER_OF_GAMES = 12 
+            self.NUMBER_OF_GAMES = 4
             self.FPS = 36
             self.NUMBER_OF_PLAYERS = 3
             self.GAME_DURATION = 30 
