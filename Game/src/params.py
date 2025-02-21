@@ -13,16 +13,16 @@ class AIHyperparameters:
 
         self.episodes = 100000
 
-        self.PLAYER_TO_BALL_REWARD_COEFF = 0.002
-        self.BALL_TO_GOAL_REWARD_COEFF = 0.3# expected max is 2 when bal
-        self.GOAL_REWARD = 300
+        self.PLAYER_TO_BALL_REWARD_COEFF = 0.001
+        self.BALL_TO_GOAL_REWARD_COEFF = 0.15# expected max is 2 when bal
+        self.GOAL_REWARD = 400
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
 
-        self.learning_rate = 5e-5
-        self.min_learning_rate = 5e-6
+        self.learning_rate = 3e-5
+        self.min_learning_rate = 3e-6
 
         self.gamma = 0.98 # discount rate
         self.batch_size = 4096
@@ -38,8 +38,8 @@ class AIHyperparameters:
         self.opposing_model_freeze_time = 2500
 
         self.current_stage = 1
-        self.stage1_steps = 1000 * 3 # one team plays (typical positions)
-        self.stage2_steps = 5000 * 3# one team plays radomn locations 
+        self.stage1_steps = 0 # one team plays (typical positions) # bad
+        self.stage2_steps = 10000 # one team plays radomn locations 
         self.stage3_steps = 30000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
@@ -86,18 +86,18 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         else: # train or test
-            model = "PPO"
-            version = 20
-            sub_version = 3 
+            model = "HUGO"
+            version = 1
+            sub_version = 1 
 
             self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
             self.Load_model = None
             self.log_name = f"{model}_v{version}_sub{sub_version}_game"
-            self.model = "PPO"
+            self.model = "HUGO"
             self.log_interval = 2500
             self.NUMBER_OF_GAMES = 4
             self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 3
+            self.NUMBER_OF_PLAYERS = 4
             self.GAME_DURATION = 30 
             self.RENDER = False
             self.CAP_FPS = False
@@ -112,20 +112,21 @@ class EnvironmentHyperparameters:
         self.HEIGHT = 700
 
         # Player properties
-        self.PLAYER_RADIUS = 18
-        self.PLAYER_SPEED = 7.5
+        self.PLAYER_RADIUS = 16
+        self.PLAYER_SPEED = 6.5
         self.PLAYER_HEIGHT = self.PLAYER_RADIUS * 2  # Diameter
         self.PLAYER_POWER = 2 # player vs player collision power 
 
         # Ball properties
         self.BALL_RADIUS = 8
-        self.BALL_FRICTION = 0.96
-        self.BALL_MAX_SPEED = 34
+        self.BALL_FRICTION = 0.97
+        self.BALL_MAX_SPEED = 13
         self.BALL_HEIGHT = self.BALL_RADIUS * 2  # Diameter
-        self.BALL_POWER =  0.43 # player vs ball collision power
+        self.BALL_POWER =  0.9 # player vs ball collision power
 
-        self.KICK_POWER = 1.37 # player vs ball collision power
-        self.DRIBBLE_POWER = 0.43
+        self.KICK_POWER = 2 # player vs ball collision power
+        self.DRIBBLE_POWER = 0.9
+
 
         # Goal properties
         self.GOAL_WIDTH = 0.05 * self.WIDTH  # 5% of the screen width (65 pixels)

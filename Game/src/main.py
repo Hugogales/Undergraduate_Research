@@ -5,8 +5,8 @@ from AI.randmodel import RandomModel
 from AI.OldPPO import OldPPOAgent
 from AI.BadTransformer import BadTransformerPPOAgent
 from AI.PPO import PPOAgent
-from AI.A2C import A2C
-#from AI.A3C import A3C
+from AI.MAAC import MAAC
+from AI.HUGO import HUGO
 import json
 from functions.Logger import Logger, set_parameters
 from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters, print_hyper_params
@@ -78,12 +78,12 @@ def train_PPO():
     elif ENV_PARAMS.model == "PPO":
         train_model = PPOAgent(mode="train")
         competing_model = PPOAgent(mode="test")
-    elif ENV_PARAMS.model == "A2C":
-        train_model = A2C(mode="train")
-        competing_model = A2C(mode="test")
-    elif ENV_PARAMS.model == "A3C":
-        train_model = A3C(mode="train")
-        competing_model = A3C(mode="test")
+    elif ENV_PARAMS.model == "MAAC":
+        train_model = MAAC(mode="train")
+        competing_model = MAAC(mode="test")
+    elif ENV_PARAMS.model == "HUGO":
+        train_model = HUGO(mode="train")
+        competing_model = HUGO(mode="test")
     else:
         raise ValueError("Model not recognized")
     competing_model.policy.eval()
@@ -234,12 +234,12 @@ def train_PPO_parralel():
     elif ENV_PARAMS.model == "PPO":
         train_model = PPOAgent(mode="train")
         competing_model = PPOAgent(mode="test")
-    elif ENV_PARAMS.model == "A2C":
-        train_model = A2C(mode="train")
-        competing_model = A2C(mode="test")
-    elif ENV_PARAMS.model == "A3C":
-        train_model = A3C(mode="train")
-        competing_model = A3C(mode="test")
+    elif ENV_PARAMS.model == "MAAC":
+        train_model = MAAC(mode="train")
+        competing_model = MAAC(mode="test")
+    elif ENV_PARAMS.model == "HUGO":
+        train_model = HUGO(mode="train")
+        competing_model = HUGO(mode="test")
         pass
     else:
         raise ValueError("Model not recognized")

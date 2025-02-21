@@ -13,7 +13,6 @@ class Memory:
         self.log_probs = []
         self.rewards = []
         self.dones = []
-        self.state_action_value = []
 
     def clear(self):
         del self.states[:]
@@ -21,7 +20,6 @@ class Memory:
         del self.log_probs[:]
         del self.rewards[:]
         del self.dones[:]
-        del self.state_action_value[:]
 
 
 class ActorCriticNetwork(nn.Module):
@@ -52,15 +50,16 @@ class ActorCriticNetwork(nn.Module):
 
         print(f"params: {sum(p.numel() for p in self.parameters())}")
 
-    def forward(self, x):
+    def actor_forward(self, x):
         action_probs = torch.softmax(self.actor(x)/ self.temperature, dim=-1)
-        dist = torch.distributions.Categorical(action_probs)
-        action_idx = dist.sample()
-        action_one_hot = torch.zeros_like(action_probs)
+        return action_probs
+
+    def critic_forward(self, x, action_idx):
+        action_one_hot = torch.zeros(x.shape[0], 18).to(x.device)
         action_one_hot.scatter_(-1, action_idx.unsqueeze(-1), 1)
         critic_input = torch.cat([x, action_one_hot], dim=-1)
         state_value = self.critic(critic_input)
-        return action_probs, state_value
+        return state_value
     
     def multi_agent_baseline(self, x):
         with torch.no_grad():
@@ -127,7 +126,7 @@ class PPOAgent:
         try :
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             with torch.no_grad():
-                action_probs, action_state_value = self.policy_old(state_tensor)
+                action_probs = self.policy_old.actor_forward(state_tensor)
             dist = torch.distributions.Categorical(action_probs)
             action = dist.sample()
             action_log_prob = dist.log_prob(action)
@@ -138,7 +137,7 @@ class PPOAgent:
             print(f"action_probs: {action_probs}")
             raise ValueError("Break")
 
-        return action.item(), action_log_prob.item(), action_state_value.item(), entropy.item()
+        return action.item(), action_log_prob.item(), entropy.item()
     
     def _action_to_input(self, action):
         action_mapping = {
@@ -175,20 +174,18 @@ class PPOAgent:
         dones = []
         gae_returns = []
         advantages = []
-        state_action_value = []
 
         for memory in self.memories:
             # Convert lists to tensors
             old_states = torch.FloatTensor(memory.states).to(self.device)
             old_actions = torch.LongTensor(memory.actions).to(self.device)
             old_log_probs = torch.FloatTensor(memory.log_probs).to(self.device)
-            state_action_values_tensor = torch.FloatTensor(memory.state_action_value).to(self.device)
 
             # Compute returns and advantages for this memory
             rewards = memory.rewards
             dones = memory.dones
             multi_agent_baseline = self.policy_old.multi_agent_baseline(old_states) 
-            gae_returns_tensor, advantages_tensor = self.compute_gae(rewards, dones, multi_agent_baseline, state_action_values_tensor)
+            gae_returns_tensor, advantages_tensor = self.compute_gae(rewards, dones, multi_agent_baseline)
 
             # Append to the combined lists
             states.append(old_states)
@@ -238,7 +235,8 @@ class PPOAgent:
                 mini_gae_returns = gae_returns[start:end]
 
                 # Forward pass
-                action_probs, state_values_new = self.policy(mini_states)
+                action_probs = self.policy.actor_forward(mini_states)
+                state_values_new = self.policy.critic_forward(mini_states, mini_actions)
                 dist = torch.distributions.Categorical(action_probs)
                 action_log_probs = dist.log_prob(mini_actions)
                 dist_entropy = dist.entropy()
@@ -272,7 +270,8 @@ class PPOAgent:
                 mini_gae_returns = gae_returns[start:]
 
                 # Forward pass
-                action_probs, state_values_new = self.policy(mini_states)
+                action_probs = self.policy.actor_forward(mini_states)
+                state_values_new = self.policy.critic_forward(mini_states, mini_actions)
                 dist = torch.distributions.Categorical(action_probs)
                 action_log_probs = dist.log_prob(mini_actions)
                 dist_entropy = dist.entropy()
@@ -346,7 +345,7 @@ class PPOAgent:
     
         return bootstrapped_return
     
-    def compute_gae(self, rewards, dones, baseline_values, state_action_values):
+    def compute_gae(self, rewards, dones, baseline_values):
         """
         Compute returns and advantages using GAE (Generalized Advantage Estimation).
 
@@ -362,7 +361,7 @@ class PPOAgent:
         advantages = []
         gae = 0
         baseline_values = baseline_values.detach().cpu().numpy()
-        state_action_values = state_action_values.detach().cpu().numpy()
+        #state_action_values = state_action_values.detach().cpu().numpy()
         for i in reversed(range(len(rewards))):
             if i == len(rewards) - 1:
                 next_value = 0 if dones[i] else baseline_values[i + 1]
@@ -415,12 +414,11 @@ class PPOAgent:
         actions = []
         entropies = []
         for i, state in enumerate(states):
-            action, log_prob, action_state_value, entropy = self.select_action(state)
+            action, log_prob, entropy = self.select_action(state)
             if self.mode == "train":
                 self.memories[i].states.append(state)
                 self.memories[i].actions.append(action)
                 self.memories[i].log_probs.append(log_prob)
-                self.memories[i].state_action_value.append(action_state_value)
 
             actions.append(self._action_to_input(action))
             entropies.append(entropy)

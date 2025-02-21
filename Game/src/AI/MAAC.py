@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
-from params import AIHyperparameters
+from params import AIHyperparameters, EnvironmentHyperparameters
 import copy
 import os
 
@@ -26,7 +26,7 @@ class Memory:
 
 class AttentionActorCriticNetwork(nn.Module):
     
-    def __init__(self, state_size, action_size, num_heads=4, embedding_dim=1024):
+    def __init__(self, state_size, action_size, num_heads=4, embedding_dim=384):
         super(AttentionActorCriticNetwork, self).__init__()
 
         AI_PARAMS = AIHyperparameters()
@@ -35,19 +35,19 @@ class AttentionActorCriticNetwork(nn.Module):
         self.emb_dim = embedding_dim
 
         self.actor = nn.Sequential(
-            nn.Linear(state_size, 1028),
+            nn.Linear(state_size, 768),
             nn.LeakyReLU(),
-            nn.Linear(1028, 1028),
+            nn.Linear(768, 768),
             nn.LeakyReLU(),
-            nn.Linear(1028, 526),
+            nn.Linear(768, 384),
             nn.LeakyReLU(),
-            nn.Linear(526, action_size),
+            nn.Linear(384, action_size),
         )
 
         self.critic_embedding = nn.Sequential(
-            nn.Linear(state_size + action_size, 1024),
+            nn.Linear(state_size + action_size, 768),
             nn.LeakyReLU(),
-            nn.Linear(1024, embedding_dim),
+            nn.Linear(768, embedding_dim),
         )
 
         # 2) Multi-head self-attention block
@@ -60,15 +60,15 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) Actor head: transforms each post-attention embedding -> action logits
         self.critic_out = nn.Sequential(
-            nn.Linear(embedding_dim, 1024),
+            nn.Linear(embedding_dim, 768),
             nn.ReLU(),
-            nn.Linear(1024, 1)
+            nn.Linear(768, 1)
         )
 
         print(f"number of parameters: {sum(p.numel() for p in self.parameters())}")
 
 
-    def forward(self, x):
+    def actor_forward(self, x):
         """
         x.shape = [batch_size, num_agents, state_dim]
           - batch_size is # of timesteps or mini-batch size
@@ -76,14 +76,21 @@ class AttentionActorCriticNetwork(nn.Module):
           - state_dim is the dimension of each agent's state
         Returns:
           action_probs: [batch_size, num_agents, action_size]
-          state_values: [batch_size, num_agents]
+        """
+        action_probs = torch.softmax(self.actor(x)/ self.temperature, dim=-1) # [B, N, action_size]
+        return action_probs
+    
+    def critic_forward(self, x, action_idx):
+        """
+        x.shape = [batch_size, num_agents, state_dim]
+          - batch_size is # of timesteps or mini-batch size
+          - num_agents is the number of agents
+          - state_dim is the dimension of each agent's state
+        Returns:
+          action_probs: [batch_size, num_agents, action_size]
         """
         B, N, D = x.shape
-
-        action_probs = torch.softmax(self.actor(x)/ self.temperature, dim=-1) # [B, N, action_size]
-        dist = torch.distributions.Categorical(action_probs) # [B, N]
-        action_idx = dist.sample() # [B, N] 
-        action_one_hot = torch.zeros_like(action_probs) # [B, N, action_size]
+        action_one_hot = torch.zeros(B, N, self.action_size).to(x.device) # [B, N, action_size]
         action_one_hot.scatter_(-1, action_idx.unsqueeze(-1), 1) # [B, N, action_size]
         critic_input = torch.cat([x, action_one_hot], dim=-1) # [B, N, state_size + action_size]
         critic_input = critic_input.reshape(B*N, -1) # [B*N, state_size + action_size]
@@ -92,27 +99,76 @@ class AttentionActorCriticNetwork(nn.Module):
         attn_output, _ = self.critic_attention_block(critic_input, critic_input, critic_input) # [B, N, embedding_dim]
         values = self.critic_out(attn_output).squeeze(-1) # [B, N]
         values = values.reshape(B, N) # [B, N]
-        return action_probs, values
+        return values
 
-    
-    def multi_agent_baseline(self, x):
+
+    def multi_agent_baseline(self, x, action_idx): # this was hard
+        """
+        x.shape = [B, N, state_dim]
+        action_idx.shape = [B, N]
+        Returns:
+        baseline_values: [B, N]
+        """
+        B, N, state_dim = x.shape
+
         with torch.no_grad():
-            batch_size = x.shape[0]
-            possible_actions = torch.eye(18).to(x.device)
-            possible_actions = possible_actions.unsqueeze(0).expand(batch_size, -1, -1)  # [batch_size, 18, 18]
-            x_expanded = x.unsqueeze(1).expand(-1, 18, -1)  # [batch_size, 18, state_size]
-            critic_input = torch.cat([x_expanded, possible_actions], dim=-1) # [batch_size, 18, state_size + action_size]
-            state_values = self.critic(critic_input) # [batch_size, 18, 1]
-            state_values = state_values.squeeze(-1) # [batch_size, 18]
-            action_probs = torch.softmax(self.actor(x)/ self.temperature, dim=-1) # [batch_size, 18]
-            state_value = (state_values * action_probs).sum(dim=-1) # [batch_size]
-        return state_value
+            #  Get actor probabilities (for weighting)
+            full_action_probs = self.actor_forward(x)  # [B, N, A]
 
+            #  Embedding for chosen action (one per agent/batch):
+            chosen_action_one_hot = torch.zeros(B, N, self.action_size, device=x.device)
+            chosen_action_one_hot.scatter_(-1, action_idx.unsqueeze(-1), 1)
+            chosen_critic_input = torch.cat([x, chosen_action_one_hot], dim=-1)  # [B, N, state_dim + A]
+            chosen_critic_input = chosen_critic_input.view(B*N, -1)              # [B*N, state_dim + A]
+            chosen_emb = self.critic_embedding(chosen_critic_input)              # [B*N, emb_dim]
+            chosen_emb = chosen_emb.view(B, N, -1)                               # [B, N, emb_dim]
 
+            # Embedding for every possible action for every agent:
+            x_expanded = x.unsqueeze(2).repeat(1, 1, self.action_size, 1)
+            range_actions = torch.arange(self.action_size, device=x.device).view(1, 1, -1)
+            action_range = range_actions.repeat(B, N, 1)  # [B, N, A]
+            all_action_one_hot = torch.zeros(B, N, self.action_size, self.action_size, device=x.device)
+            all_action_one_hot.scatter_( -1, action_range.unsqueeze(-1), 1)
+            critic_input_all = torch.cat([x_expanded, all_action_one_hot], dim=-1)
 
-class A2C:
+            # Flatten to feed into critic_embedding
+            critic_input_all = critic_input_all.view(B*N*self.action_size, -1)  # [B*N*A, state_dim + A]
+            all_actions_emb = self.critic_embedding(critic_input_all)           # [B*N*A, emb_dim]
+            all_actions_emb = all_actions_emb.view(B, N, self.action_size, -1)  # [B, N, A, emb_dim]
+
+            # For each agent i, build the final “attention input”
+            baseline_values = torch.zeros(B, N, device=x.device)
+
+            for i in range(N):
+                # Build a list of embeddings for all agents:
+                agent_emb_list = chosen_emb.clone()  # shape => [B, N, emb_dim]
+
+                # Replace i-th agent’s embedding with the “all possible actions” embeddings
+                agent_emb_list = agent_emb_list.unsqueeze(2).repeat(1, 1, self.action_size, 1)
+                agent_emb_list[:, i, :, :] = all_actions_emb[:, i, :, :]
+
+                # Flatten to pass through attention -> [B*A, N, emb_dim]
+                agent_emb_list = agent_emb_list.permute(0, 2, 1, 3)  # => [B, A, N, emb_dim]
+                agent_emb_list = agent_emb_list.reshape(B*self.action_size, N, -1)  # => [B*A, N, emb_dim]
+
+                # Pass through attention
+                attn_output, _ = self.critic_attention_block(agent_emb_list, agent_emb_list, agent_emb_list) # [B*A, N, emb_dim]
+
+                # Extract the i-th agent’s embedding 
+                agent_output = attn_output[:, i, :]  # [B*A, emb_dim]
+
+                agent_values = self.critic_out(agent_output).squeeze(-1)  # [B*A]
+                agent_values = agent_values.view(B, self.action_size) # [B, A]
+                agent_probs = full_action_probs[:, i, :]  # [B, A]
+                agent_baseline = (agent_values * agent_probs).sum(dim=1)  # [B]
+                baseline_values[:, i] = agent_baseline
+
+            return baseline_values
+
+class MAAC:
     def __init__(self, mode="train"):
         AI_PARAMS = AIHyperparameters()
+        ENV_PARAMS = EnvironmentHyperparameters()
 
         self.mode = "train"
         self.memories = []
@@ -131,7 +187,9 @@ class A2C:
         self.min_learning_rate = AI_PARAMS.min_learning_rate
         self.episodes = AI_PARAMS.episodes
         self.td_dif_N = AI_PARAMS.TD_difference_N
-
+        
+        self.number_of_agents = ENV_PARAMS.NUMBER_OF_PLAYERS
+        self.mini_batch_size = int(self.mini_batch_size // self.number_of_agents) # batches will be grouped by number of agents
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Initialize policy network and old policy network
@@ -157,42 +215,25 @@ class A2C:
     def _build_model(self):
         return AttentionActorCriticNetwork(self.state_size, self.action_size)
 
-    # ---------------------------------------------------------------------------------
-    # # changed: we now select actions for all agents in one forward pass
-    # ---------------------------------------------------------------------------------
-    def select_action(self, states):
-        """
-        states shape: [num_agents, state_dim]
-        This function will add a batch dimension of size 1, pass it through policy_old,
-        and return a list of (action, logprob, value, entropy) for each agent.
-        """
-        states_tensor = torch.FloatTensor(states).unsqueeze(0).to(self.device)  # [1, num_agents, state_dim]
-        with torch.no_grad():
-            action_probs, values = self.policy_old(states_tensor)  # shapes: [1, N, action_size], [1, N]
-        action_probs = action_probs[0]  # [N, action_size]
-        values = values[0]             # [N]
+    def select_action(self, state):
+        try :
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            with torch.no_grad():
+                action_probs = self.policy_old.actor_forward(state_tensor) # [1, num_agents, action_size]
 
-        # For each agent, sample an action
-        actions = []
-        log_probs = []
-        entropies = []
-        for i in range(action_probs.size(0)):
-            dist = torch.distributions.Categorical(action_probs[i])
-            action = dist.sample()
-            actions.append(action.item())
-            log_probs.append(dist.log_prob(action).item())
-            entropies.append(dist.entropy().item())
+            dist = torch.distributions.Categorical(action_probs)
+            action = dist.sample() # [1, num_agents]
+            action_log_prob = dist.log_prob(action) # [1, num_agents]
+            entropy = dist.entropy() # [1, num_agents]
+        except ValueError as e:
+            print(e)
+            print(f"state tensor: {state_tensor}")
+            print(f"action_probs: {action_probs}")
+            raise ValueError("Break")
 
-        # Values is a vector of shape [N], one value per agent
-        return actions, log_probs, values.cpu().numpy(), entropies
-
+        return action.item(), action_log_prob.item(), entropy.item()
+    
     def _action_to_input(self, action):
-        """
-        Maps action index to movement input.
-        
-        :param action: The action index.
-        :return: The movement input as a list.
-        """
         action_mapping = {
             0: [1, 0, 0, 0, 0],  # Up - drible
             1: [0, 1, 0, 0, 0],  # Down - drible
@@ -217,10 +258,11 @@ class A2C:
 
     def update(self):
         """
-        Performs PPO update using experiences stored in the provided memories.
-
-        :param memories: List of Memory instances (one for each agent)
+        B = batch size or number of timesteps
+        N = number of agents
+        G = number of games
         """
+
         if self.mode != "train":
             return
 
@@ -230,61 +272,62 @@ class A2C:
         log_probs = []
         rewards = []
         dones = []
-        action_state_values = []
-        bootstrapped_returns = []
+        gae_returns = []
         advantages = []
 
-        for memory in self.memories:
-            # Convert lists to tensors
-            old_states = torch.FloatTensor(memory.states).to(self.device)
-            old_actions = torch.LongTensor(memory.actions).to(self.device)
-            old_log_probs = torch.FloatTensor(memory.log_probs).to(self.device)
-            action_state_values_tensor = torch.FloatTensor(memory.action_state_values).to(self.device).squeeze()
+        for i in range(0, len(self.memories), self.number_of_agents): # for each game
+            old_states = [] # [N, B, state_size]
+            old_actions = [] # [N, B]
+            old_log_probs = [] # [N, B]
+            rewards = [] # [N, B]
+            dones = [] # [N, B]
 
-            # Compute returns and advantages for this memory
-            rewards = memory.rewards
-            dones = memory.dones
-            #bootstrapped_returns_tensor = self.temporal_difference(rewards, dones, action_state_values_tensor)
-            bootstrapped_returns_tensor, advantages_tensor = self.compute_gae(rewards, dones, action_state_values_tensor)
+            for j in range(self.number_of_agents): # for each agent
+                old_states.append(self.memories[i+j].states)
+                old_actions.append(self.memories[i+j].actions)
+                old_log_probs.append(self.memories[i+j].log_probs)
+                rewards.append(self.memories[i+j].rewards)
+                dones.append(self.memories[i+j].dones)
+            
+            # Convert lists to tensors and reshape
+            old_states = torch.FloatTensor(old_states).permute(1, 0, 2).to(self.device) # [B, N, state_size]
+            old_actions = torch.LongTensor(old_actions).permute(1, 0).to(self.device) # [B, N]
+            old_log_probs = torch.FloatTensor(old_log_probs).permute(1, 0).to(self.device) # [B, N]
+            rewards = torch.FloatTensor(rewards).permute(1, 0).to(self.device) # [B, N]
+            dones = torch.FloatTensor(dones).permute(1, 0).to(self.device) # [B, N]
 
-            # Compute advantages
-            #multi_agent_baseline = self.policy_old.multi_agent_baseline(old_states) 
-            #advantages_tensor = action_state_values_tensor - multi_agent_baseline
+            multi_agent_baseline = self.policy_old.multi_agent_baseline(old_states, old_actions) # [B, N]
+            gae_returns_tensor, advantages_tensor = self.compute_gae(rewards, dones, multi_agent_baseline) # [B, N], [B, N]
 
             # Append to the combined lists
-            states.append(old_states)
+            states.append(old_states) 
             actions.append(old_actions)
             log_probs.append(old_log_probs)
-            action_state_values.append(action_state_values_tensor)
             advantages.append(advantages_tensor)
-            bootstrapped_returns.append(bootstrapped_returns_tensor)
+            gae_returns.append(gae_returns_tensor)
 
             # Clear memory after processing
-            memory.clear()
+            for j in range(self.number_of_agents):
+                self.memories[i+j]
 
         # Concatenate experiences from all agents
-        # We now have lists from each agent. We do a vertical stack because each memory is T timesteps for that agent
-        # If we had N agents, each memory is length T, total is T*N
-        states = torch.cat(states, dim=1)
-        actions = torch.cat(actions, dim=1)
-        log_probs = torch.cat(log_probs, dim=1)
-        advantages = torch.cat(advantages, dim=1)
-        bootstrapped_returns = torch.cat(bootstrapped_returns, dim=1)
+        states = torch.cat(states, dim=0) # [B*G , N, state_size]
+        actions = torch.cat(actions, dim=0) # [B*G , N]
+        log_probs = torch.cat(log_probs, dim=0) # [B*G , N]
+        advantages = torch.cat(advantages, dim=0) # [B*G , N] 
+        gae_returns = torch.cat(gae_returns, dim=0) # [B*G , N]
 
         # Normalize advantages
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-5)
 
-
-        # Flatten T and N -> single dimension for shuffle
-        T, N, D = states.shape[0], states.shape[1], states.shape[2]
-
         # Shuffle the data
-        dataset_size = T * N
+        dataset_size = states.size(0)
         indices = torch.randperm(dataset_size)
         states = states[indices]
         actions = actions[indices]
         log_probs = log_probs[indices]
         advantages = advantages[indices]
+        gae_returns = gae_returns[indices]
 
         # Define mini-batch size
         mini_batch_size = self.mini_batch_size  # e.g., 64
@@ -298,19 +341,21 @@ class A2C:
                 end = start + mini_batch_size
 
                 # Slice the mini-batch
-                mini_states = states[start:end]
-                mini_actions = actions[start:end]
-                mini_log_probs = log_probs[start:end]
-                mini_advantages = advantages[start:end]
-
+                mini_states = states[start:end] # [mini_batch_size, N, state_size]
+                mini_actions = actions[start:end] # [mini_batch_size, N]
+                mini_log_probs = log_probs[start:end] # [mini_batch_size, N]
+                mini_advantages = advantages[start:end] # [mini_batch_size, N]
+                mini_gae_returns = gae_returns[start:end] # [mini_batch_size, N]
+                
                 # Forward pass
-                action_probs, state_values_new = self.policy(mini_states)
-                dist = torch.distributions.Categorical(action_probs)
-                action_log_probs = dist.log_prob(mini_actions)
-                dist_entropy = dist.entropy()
-
+                action_probs = self.policy.actor_forward(mini_states) # [mini_batch_size, N, action_size]
+                state_values_new = self.policy.critic_forward(mini_states, mini_actions) # [mini_batch_size, N]
+                dist = torch.distributions.Categorical(action_probs) # [mini_batch_size, N]
+                action_log_probs = dist.log_prob(mini_actions) # [mini_batch_size, N]
+                dist_entropy = dist.entropy() # [mini_batch_size, N]
+                
                 # Calculate the ratios
-                ratios = torch.exp(action_log_probs - mini_log_probs)
+                ratios = torch.exp(action_log_probs - mini_log_probs) # [mini_batch_size, N]
 
                 # Calculate surrogate losses
                 surr1 = ratios * mini_advantages
@@ -318,7 +363,7 @@ class A2C:
 
                 # Calculate loss
                 actor_loss = -torch.min(surr1, surr2).mean()
-                critic_loss = self.MseLoss(state_values_new.squeeze(), mini_advantages) 
+                critic_loss = self.MseLoss(state_values_new.squeeze(), mini_gae_returns) 
                 loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean()
 
                 # Backward pass and optimization
@@ -335,9 +380,11 @@ class A2C:
                 mini_actions = actions[start:]
                 mini_log_probs = log_probs[start:]
                 mini_advantages = advantages[start:]
+                mini_gae_returns = gae_returns[start:]
 
                 # Forward pass
-                action_probs, state_values_new = self.policy(mini_states)
+                action_probs = self.policy.actor_forward(mini_states)
+                state_values_new = self.policy.critic_forward(mini_states, mini_actions)
                 dist = torch.distributions.Categorical(action_probs)
                 action_log_probs = dist.log_prob(mini_actions)
                 dist_entropy = dist.entropy()
@@ -349,7 +396,7 @@ class A2C:
                 surr1 = ratios * mini_advantages
                 surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * mini_advantages
                 actor_loss = -torch.min(surr1, surr2).mean()
-                critic_loss = self.MseLoss(state_values_new.squeeze(), mini_advantages) 
+                critic_loss = self.MseLoss(state_values_new.squeeze(), mini_gae_returns)
                 loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean()
                 # Calculate loss
 
@@ -363,87 +410,54 @@ class A2C:
         self.policy_old.load_state_dict(self.policy.state_dict())
         self.scheduler.step()
 
-
     
-    def temporal_difference(self, rewards, dones, action_state_values):
-        """
-        Computes N-step returns (bootstrapped) for each time step, 
-        then returns a list/array that you can compare with predicted Q-values.
-        """
-        with torch.no_grad():
-            N = self.td_dif_N
-            gamma = self.gamma
-            T = len(rewards)
-    
-            # Convert predicted Q-values to CPU if needed, for easy manipulation
-            # We'll convert back to CUDA after computation if necessary
-            action_state_values = action_state_values.detach().cpu().numpy()
-    
-            # Prepare an array for the N-step targets
-            bootstrapped_return = np.zeros_like(action_state_values, dtype=np.float32)
-    
-            for t in range(T):
-                G = 0.0
-                discount = 1.0
-    
-                # Accumulate discounted rewards for up to N steps or until 'done'
-                episode_ended = False
-                for i in range(N):
-                    idx = t + i
-                    if idx < T:
-                        G += discount * rewards[idx]
-                        discount *= gamma
-                        if dones[idx]:
-                            episode_ended = True
-                            break
-                    else:
-                        break
-    
-                # add the estimated state value at time step t+N if it's not the end of the episode
-                final_idx = t + N
-                if not episode_ended and final_idx < T and not dones[final_idx - 1]:
-                    G += discount * action_state_values[final_idx]
-    
-                bootstrapped_return[t] = G
-    
-            # Convert the bootstrapped_return back to a torch.Tensor on the same device
-            bootstrapped_return = torch.tensor(bootstrapped_return, dtype=torch.float32, device=self.device)
-    
-        return bootstrapped_return
-    
-    def compute_gae(self, rewards, dones, values):
+    def compute_gae(self, rewards, dones, baseline_values):
         """
         Compute returns and advantages using GAE (Generalized Advantage Estimation).
-
-        :param rewards: List of rewards for an episode.
-        :param dones: List of done flags for an episode.
-        :param values: Tensor of state values.
+    
+        :param rewards: List of rewards for an episode. # [B, N]
+        :param dones: List of done flags for an episode. # [B, N]
+        :param baseline_values: Tensor of state baseline_values. # [B, N]
         :return: Tensors of returns.
         """
         if self.mode != "train":
             return
-        
+
+        # reshaping
+        baseline_values = baseline_values.reshape(-1) # [B*N]
+        dones = dones.reshape(-1) # [B*N]
+        rewards = rewards.reshape(-1) # [B*N]
+
+        baseline_values = baseline_values.detach().cpu().numpy()
+        dones = dones.detach().cpu().numpy()
+        rewards = rewards.detach().cpu().numpy()
+
         gamma = self.gamma
         advantages = []
         gae = 0
-        values = values.detach().cpu().numpy()
         for i in reversed(range(len(rewards))):
             if i == len(rewards) - 1:
-                next_value = 0 if dones[i] else values[i + 1]
+                next_value = 0 if dones[i] else baseline_values[i + 1]
             else:
-                next_value = values[i + 1]
-            delta = rewards[i] + gamma * next_value * (1 - dones[i]) - values[i]
+                next_value = baseline_values[i + 1]
+            delta = rewards[i] + gamma * next_value * (1 - dones[i]) - baseline_values[i]
             gae = delta + gamma * self.lam * (1 - dones[i]) * gae
             advantages.insert(0, gae)
         advantages = np.array(advantages)
-        returns = advantages + values
-        return torch.FloatTensor(returns).to(self.device), torch.FloatTensor(advantages).to(self.device)
+        returns = advantages + baseline_values
+
+        #reshaping and converting to tensor [B, N]
+        returns = torch.FloatTensor(returns).reshape(-1, self.number_of_agents).to(self.device)
+        advantages = torch.FloatTensor(advantages).reshape(-1, self.number_of_agents).to(self.device)
+        return returns, advantages
+
     
     def save_model(self, model_name="PPO_model_giant"):
         path = f"files/Models/{model_name}.pth"
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save(self.policy.state_dict(), path)
         print(f"Model saved to {path}")
+
 
     def load_model(self, model_name="PPO_model_big", test=False):
         path = f"files/Models/{model_name}.pth"
@@ -459,6 +473,7 @@ class A2C:
             print(f"Model loaded from {path}")
         else:
             print(f"Model file {path} does not exist.")
+
     
     def memory_prep(self, number_of_agents):
         if self.mode != "train":
@@ -473,34 +488,21 @@ class A2C:
 
     
     def get_actions(self, states):
-        """
-        states: list of shape [num_agents, state_dim] if we stacked them,
-                or a list of length N each of shape [state_dim].
-        Return: (actions, entropies)
-          - actions is a list (len num_agents) of the discrete moves
-          - entropies is a list (len num_agents) of the entropies
-        """
-        # Convert states into a single array [num_agents, state_dim]
-        state_tensor = np.array(states)  # shape [num_agents, state_dim]
-
-        # Single call to select_action
-        actions_indices, log_probs, values, entropies = self.select_action(state_tensor)
-
-        # If in train mode, store them into memory
-        if self.mode == "train":
-            for i in range(len(actions_indices)):
-                self.memories[i].states.append(states[i])
-                self.memories[i].actions.append(actions_indices[i])
-                self.memories[i].log_probs.append(log_probs[i])
-                self.memories[i].state_values.append(values[i])
-
-        # Convert discrete actions to environment input
         actions = []
-        for a_idx in actions_indices:
-            actions.append(self._action_to_input(a_idx))
+        entropies = []
+        for i, state in enumerate(states):
+            action, log_prob, entropy = self.select_action(state)
+            if self.mode == "train":
+                self.memories[i].states.append(state)
+                self.memories[i].actions.append(action)
+                self.memories[i].log_probs.append(log_prob)
 
+            actions.append(self._action_to_input(action))
+            entropies.append(entropy)
+        
         return actions, entropies
     
+
     def store_rewards(self, rewards, done):
         if self.mode != "train":
             return
@@ -509,9 +511,11 @@ class A2C:
             self.memories[i].rewards.append(rewards[i])
             self.memories[i].dones.append(done)
         
+
     def clone(self):
         return copy.deepcopy(self)
     
+
     def assign_device(self, device):
         self.device = device
         self.policy.to(device)
