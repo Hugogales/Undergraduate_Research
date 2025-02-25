@@ -348,7 +348,7 @@ class MAAC:
                 mini_gae_returns = gae_returns[start:end] # [mini_batch_size, N]
                 
                 # Forward pass
-                action_probs = self.policy.actor_forward(mini_states) # [mini_batch_size, N, action_size]
+                action_probs, similarity_loss = self.policy.actor_forward(mini_states) # [mini_batch_size, N, action_size]
                 state_values_new = self.policy.critic_forward(mini_states, mini_actions) # [mini_batch_size, N]
                 dist = torch.distributions.Categorical(action_probs) # [mini_batch_size, N]
                 action_log_probs = dist.log_prob(mini_actions) # [mini_batch_size, N]

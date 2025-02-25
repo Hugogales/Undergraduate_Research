@@ -63,10 +63,7 @@ class Player:
         self.radius = ENV_PARAMS.PLAYER_RADIUS
         self.speed = ENV_PARAMS.PLAYER_SPEED
         self.velocity = [0, 0]  # (vx, vy)
-
-        self.power = ENV_PARAMS.DRIBBLE_POWER
-        self.dribble_power = ENV_PARAMS.DRIBBLE_POWER
-        self.kick_power = ENV_PARAMS.KICK_POWER
+        self.is_kick = False
 
         # Animation and Direction Attributes
 
@@ -174,9 +171,9 @@ class Player:
             if arr[2] == 1: # left
                 vx += self.speed
         if arr[4] == 1: # shoot
-            self.power = self.kick_power
+            self.is_kick = True
         else:
-            self.power = self.dribble_power
+            self.is_kick = False
 
                 # Normalize velocity to maintain constant speed
         if vx != 0 or vy != 0:

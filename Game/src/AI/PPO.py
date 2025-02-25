@@ -26,23 +26,27 @@ class ActorCriticNetwork(nn.Module):
     def __init__(self, state_size, action_size):
         super(ActorCriticNetwork, self).__init__()
         self.actor = nn.Sequential(
-            nn.Linear(state_size, 726),
+            nn.Linear(state_size, 1024),
             nn.LeakyReLU(),
-            nn.Linear(726, 726),
+            nn.Linear(1024, 1024),
             nn.LeakyReLU(),
-            nn.Linear(726, 312),
+            nn.Linear(1024, 1024),
             nn.LeakyReLU(),
-            nn.Linear(312, action_size),
+            nn.Linear(1024, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, action_size),
         )
 
         self.critic = nn.Sequential(
-            nn.Linear(state_size + action_size, 726),
+            nn.Linear(state_size + action_size, 1024),
             nn.LeakyReLU(),
-            nn.Linear(726, 726),
+            nn.Linear(1024, 1024),
             nn.LeakyReLU(),
-            nn.Linear(726, 312),
+            nn.Linear(1024, 1024),
             nn.LeakyReLU(),
-            nn.Linear(312, 1),
+            nn.Linear(1024, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, 1),
         )
        
         AI_PARAMS = AIHyperparameters()

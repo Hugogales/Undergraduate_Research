@@ -73,6 +73,7 @@ class Game:
             position=[ENV_PARAMS.WIDTH // 2 + random_y, ENV_PARAMS.HEIGHT // 2 + random_x],
         )
         self.ball_power = ENV_PARAMS.BALL_POWER
+        self.kick_speed = ENV_PARAMS.KICK_SPEED
 
         # Initialize Goals (only central part with inner boundaries)
         goal_height = ENV_PARAMS.GOAL_HEIGHT
@@ -176,12 +177,16 @@ class Game:
                 return  # They are moving away from each other
 
             # Define restitution (elasticity)
-            restitution = 0.7  # 0 = inelastic, 1 = perfectly elastic
+            restitution = 0.8  # 0 = inelastic, 1 = perfectly elastic
             
             # Update ball's velocity based on collision
-            ball.velocity[0] -= (1 + restitution) * velocity_along_normal * direction_x * player.power
-            ball.velocity[1] -= (1 + restitution) * velocity_along_normal * direction_y * player.power
+            base_velocity = (1 + restitution) * velocity_along_normal * self.ball_power
+            base_velocity = -self.kick_speed if player.is_kick else base_velocity
+            
+            ball.velocity[0] -= (base_velocity) * direction_x
+            ball.velocity[1] -= (base_velocity) * direction_y
 
+            print(f"ball velocity after: {ball.velocity}")
 
     def check_player_collision(self, player1, player2):
         """

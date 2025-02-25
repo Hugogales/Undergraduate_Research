@@ -50,8 +50,10 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) critic head: transforms each post-attention embedding -> value
         self.actor_out = nn.Sequential(
-            nn.Linear(embedding_dim, 768),
-            nn.ReLU(),
+            nn.Linear(embedding_dim + embedding_dim, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 768),
+            nn.LeakyReLU(),
             nn.Linear(768, action_size)
         )
 
@@ -71,13 +73,14 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) critic head: transforms each post-attention embedding -> value
         self.critic_out = nn.Sequential(
-            nn.Linear(embedding_dim, 768),
-            nn.ReLU(),
+            nn.Linear(embedding_dim+ embedding_dim, 768),
+            nn.LeakyReLU(),
+            nn.Linear(768, 768),
+            nn.LeakyReLU(),
             nn.Linear(768, 1)
         )
 
         print(f"number of parameters: {sum(p.numel() for p in self.parameters())}")
-
 
     def actor_forward(self, x):
         """
@@ -93,8 +96,37 @@ class AttentionActorCriticNetwork(nn.Module):
         actor_input = self.actor_embedding(actor_input) # [B*N, embedding_dim]
         actor_input = actor_input.reshape(B, N, -1) # [B, N, embedding_dim]
         attn_output, _ = self.actor_attention_block(actor_input, actor_input, actor_input) # [B, N, embedding_dim]
+        attn_output = torch.cat([attn_output, actor_input], dim=-1) # [B, N, 2*embedding_dim]
         action_probs = torch.softmax(self.actor_out(attn_output), dim=-1) # [B, N, action_size]
+
         return action_probs
+
+    def actor_forward_update(self, x):
+        """
+        x.shape = [batch_size, num_agents, state_dim]
+          - batch_size is # of timesteps or mini-batch size
+          - num_agents is the number of agents
+          - state_dim is the dimension of each agent's state
+        Returns:
+          action_probs: [batch_size, num_agents, action_size]
+        """
+        B, N, D = x.shape
+        actor_input = x.reshape(B*N, -1) # [B*N, state_size]
+        actor_input = self.actor_embedding(actor_input) # [B*N, embedding_dim]
+        actor_input = actor_input.reshape(B, N, -1) # [B, N, embedding_dim]
+        attn_output, _ = self.actor_attention_block(actor_input, actor_input, actor_input) # [B, N, embedding_dim]
+        attn_output = torch.cat([attn_output, actor_input], dim=-1) # [B, N, 2*embedding_dim]
+        action_probs = torch.softmax(self.actor_out(attn_output), dim=-1) # [B, N, action_size]
+
+        # similarity loss 
+        normalized_attn_output = attn_output / attn_output.norm(dim=-1, keepdim=True) # [B, N, embedding]
+        similarity_matrix = torch.matmul(normalized_attn_output, normalized_attn_output.transpose(-2, -1)) # [B, N, N]
+        mask = torch.eye(N, device=x.device).unsqueeze(0).expand(B, -1, -1).bool() # [B, N, N]
+        similarity_matrix = similarity_matrix.masked_fill(mask, 0) # [B, N, N]
+        similarity_loss = torch.sum(similarity_matrix, dim=(1, 2)) / (N * (N - 1))  # [1]
+        similarity_loss = similarity_loss.mean()
+
+        return action_probs, similarity_loss
     
     def critic_forward(self, x, action_idx):
         """
@@ -113,6 +145,7 @@ class AttentionActorCriticNetwork(nn.Module):
         critic_input = self.critic_embedding(critic_input) # [B*N, embedding_dim]
         critic_input = critic_input.reshape(B, N, -1) # [B, N, embedding_dim]
         attn_output, _ = self.critic_attention_block(critic_input, critic_input, critic_input) # [B, N, embedding_dim]
+        attn_output = torch.cat([attn_output, critic_input], dim=-1) # [B, N, 2*embedding_dim]
         values = self.critic_out(attn_output).squeeze(-1) # [B, N]
         values = values.reshape(B, N) # [B, N]
         return values
@@ -169,6 +202,7 @@ class AttentionActorCriticNetwork(nn.Module):
 
                 # Pass through attention
                 attn_output, _ = self.critic_attention_block(agent_emb_list, agent_emb_list, agent_emb_list) # [B*A, N, emb_dim]
+                attn_output = torch.cat([attn_output, agent_emb_list], dim=-1)  # [B*A, N, 2*emb_dim]
 
                 # Extract the i-th agent’s embedding 
                 agent_output = attn_output[:, i, :]  # [B*A, emb_dim]
@@ -203,6 +237,7 @@ class HUGO: # Hierarchical Unified Generalized Optimization
         self.min_learning_rate = AI_PARAMS.min_learning_rate
         self.episodes = AI_PARAMS.episodes
         self.td_dif_N = AI_PARAMS.TD_difference_N
+        self.similarity_loss_coef = AI_PARAMS.similarity_loss_coef
         
         self.number_of_agents = ENV_PARAMS.NUMBER_OF_PLAYERS
         self.mini_batch_size = int(self.mini_batch_size // self.number_of_agents) # batches will be grouped by number of agents
@@ -364,7 +399,7 @@ class HUGO: # Hierarchical Unified Generalized Optimization
                 mini_gae_returns = gae_returns[start:end] # [mini_batch_size, N]
                 
                 # Forward pass
-                action_probs = self.policy.actor_forward(mini_states) # [mini_batch_size, N, action_size]
+                action_probs, similarity_loss= self.policy.actor_forward_update(mini_states) # [mini_batch_size, N, action_size]
                 state_values_new = self.policy.critic_forward(mini_states, mini_actions) # [mini_batch_size, N]
                 dist = torch.distributions.Categorical(action_probs) # [mini_batch_size, N]
                 action_log_probs = dist.log_prob(mini_actions) # [mini_batch_size, N]
@@ -380,7 +415,8 @@ class HUGO: # Hierarchical Unified Generalized Optimization
                 # Calculate loss
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = self.MseLoss(state_values_new.squeeze(), mini_gae_returns) 
-                loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean()
+
+                loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean() + self.similarity_loss_coef * similarity_loss
 
                 # Backward pass and optimization
                 self.optimizer.zero_grad()
@@ -399,7 +435,7 @@ class HUGO: # Hierarchical Unified Generalized Optimization
                 mini_gae_returns = gae_returns[start:]
 
                 # Forward pass
-                action_probs = self.policy.actor_forward(mini_states)
+                action_probs, similarity_loss = self.policy.actor_forward_update(mini_states)
                 state_values_new = self.policy.critic_forward(mini_states, mini_actions)
                 dist = torch.distributions.Categorical(action_probs)
                 action_log_probs = dist.log_prob(mini_actions)
@@ -413,7 +449,7 @@ class HUGO: # Hierarchical Unified Generalized Optimization
                 surr2 = torch.clamp(ratios, 1 - self.epsilon_clip, 1 + self.epsilon_clip) * mini_advantages
                 actor_loss = -torch.min(surr1, surr2).mean()
                 critic_loss = self.MseLoss(state_values_new.squeeze(), mini_gae_returns)
-                loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean()
+                loss = actor_loss + self.c_value * critic_loss - self.c_entropy * dist_entropy.mean() + self.similarity_loss_coef * similarity_loss
                 # Calculate loss
 
                 # Backward pass and optimization
