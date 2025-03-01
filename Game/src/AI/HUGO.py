@@ -26,7 +26,7 @@ class Memory:
 
 class AttentionActorCriticNetwork(nn.Module):
     
-    def __init__(self, state_size, action_size, num_heads=4, embedding_dim=384):
+    def __init__(self, state_size, action_size, num_heads=4, embedding_dim=256):
         super(AttentionActorCriticNetwork, self).__init__()
 
         AI_PARAMS = AIHyperparameters()
@@ -35,9 +35,9 @@ class AttentionActorCriticNetwork(nn.Module):
         self.emb_dim = embedding_dim
 
         self.actor_embedding = nn.Sequential(
-            nn.Linear(state_size, 768),
+            nn.Linear(state_size, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, embedding_dim),
+            nn.Linear(526, embedding_dim),
         )
 
         # 2) Multi-head self-attention block
@@ -50,17 +50,17 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) critic head: transforms each post-attention embedding -> value
         self.actor_out = nn.Sequential(
-            nn.Linear(embedding_dim + embedding_dim, 768),
+            nn.Linear(embedding_dim + embedding_dim, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, 768),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, action_size)
+            nn.Linear(526, action_size)
         )
 
         self.critic_embedding = nn.Sequential(
-            nn.Linear(state_size + action_size, 768),
+            nn.Linear(state_size + action_size, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, embedding_dim),
+            nn.Linear(526, embedding_dim),
         )
 
         # 2) Multi-head self-attention block
@@ -73,11 +73,11 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) critic head: transforms each post-attention embedding -> value
         self.critic_out = nn.Sequential(
-            nn.Linear(embedding_dim+ embedding_dim, 768),
+            nn.Linear(embedding_dim+ embedding_dim, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, 768),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, 1)
+            nn.Linear(526, 1)
         )
 
         print(f"number of parameters: {sum(p.numel() for p in self.parameters())}")
@@ -100,6 +100,7 @@ class AttentionActorCriticNetwork(nn.Module):
         action_probs = torch.softmax(self.actor_out(attn_output), dim=-1) # [B, N, action_size]
 
         return action_probs
+
 
     def actor_forward_update(self, x):
         """
@@ -127,6 +128,7 @@ class AttentionActorCriticNetwork(nn.Module):
         similarity_loss = similarity_loss.mean()
 
         return action_probs, similarity_loss
+
     
     def critic_forward(self, x, action_idx):
         """
@@ -149,6 +151,7 @@ class AttentionActorCriticNetwork(nn.Module):
         values = self.critic_out(attn_output).squeeze(-1) # [B, N]
         values = values.reshape(B, N) # [B, N]
         return values
+
 
 
     def multi_agent_baseline(self, x, action_idx): # this was hard

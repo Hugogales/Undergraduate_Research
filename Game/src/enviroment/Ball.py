@@ -25,6 +25,7 @@ class Ball:
         self.orginal_position = position.copy()
         self.radius = ENV_PARAMS.BALL_RADIUS
         self.velocity = [0, 0]  # (vx, vy)
+        self.last_hit_player_id = None
 
         if ENV_PARAMS.RENDER:
             # Load ball image

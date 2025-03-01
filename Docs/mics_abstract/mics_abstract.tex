@@ -36,15 +36,14 @@
 
     \parbox{0.85\textwidth}{
         \fontsize{12}{14}\selectfont
-        Collaboration is essential in solving complex real-world problems,
-        as it enables tasks to be completed more efficiently and leverages the diverse perspectives of team members.
-        Multi-Agent Reinforcement Learning (MARL) can be utilized to model environments where agents must collaborate to achieve a common goal.
-        However, promoting collaboration in MARL is challenging due to the non-stationarity of the environment and the difficulty of learning an effective collaborative shared policy or individual policies.
-        Previous work has been done to use an attention mechanism in the critic of the Actor-Critic architecture to improve the learning of collaborative policies [1].
-        This attention mechanism allows the critic to select the relevant information from the other agents' observations promoting for better learning of the value function.
-        In this paper, we propose a new actor-critic architecture that additionally incorporates an attention mechanism in the actor to bring the same benefits to the policy learning.
-        To evaluate this architecture, the environment will be using is a simulation of a soccer game where agents must collaborate to outsmart the opposing team and score goals.
-        The results of this work will be compared to the current state-of-the-art in MARL as well as classical reinforcement learning algorithms to determine the effectiveness of the proposed architecture.
+        Collaboration is essential in solving complex real-world problems, as it enables tasks to be completed more efficiently and leverages the diverse perspectives and skillsets of team members.
+        Multi-Agent Reinforcement Learning (MARL) can be utilized to train agents in environments where they must collaborate to achieve a common goal. 
+        MARL is challenging due to non-stationarity introduced into the environment by multiple agents learning simultaneously and its development has mainly focused on managing these challenges without any special focus on collaboration. 
+        Recent work on MARL has introduced the use of an attention mechanism in the critic of the Actor-Critic architecture that allows the critic to select relevant information from the other agents' observations, promoting better learning of the value function.
+        In this paper, we study the impact of the attention mechanism on the quality of learned collaborative policies. 
+        We propose a new actor-critic architecture that incorporates an attention mechanism in the actor to model collaboration directly in the learned policies.  
+        We evaluate this architecture on a simulation of a soccer game that features competition between teams of collaborators and compare it to current state-of-the-art in MARL as well as classical reinforcement learning algorithms.
+        
     }
 \end{center}
 

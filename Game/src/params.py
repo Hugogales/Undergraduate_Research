@@ -11,36 +11,40 @@ class AIHyperparameters:
         ## rewards
         self._env = EnvironmentHyperparameters()
 
+        self.NOTE = ""
+
         self.episodes = 60000
 
-        self.PLAYER_TO_BALL_REWARD_COEFF = 0.0005 
-        self.BALL_TO_GOAL_REWARD_COEFF =  0.15  
-        self.GOAL_REWARD = 400 
+        self.PLAYER_TO_BALL_REWARD_COEFF = 0.0002
+        self.BALL_TO_GOAL_REWARD_COEFF =  0.2
+        self.GOAL_REWARD = 500 
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
+        self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
+        self.ACTION_SIZE = 18
 
-        self.learning_rate = 2e-6  
-        self.min_learning_rate = 1e-6 
+        self.learning_rate = 1e-5 
+        self.min_learning_rate = 0.9e-5
 
-        self.gamma = 0.975 # discount rate
-        self.batch_size = 4096 // 2
-        self.c_entropy = 0.003 # how much entropy is weighted
+        self.gamma = 0.98 # discount rate
+        self.batch_size = 2048 
+        self.c_entropy = 0.001 # how much entropy is weighted
         self.temperature = 1
         self.max_grad_norm = 1000
-        self.lam = 0.95 # GAE lambda
+        self.lam = 0.98 # GAE lambda
         self.c_value = 1 #5 how much critic loss is weighted
         self.TD_difference_N = 1
-        self.similarity_loss_coef = 0.0001
+        self.similarity_loss_coef = 0.001
 
         self.epsilon_clip = 0.12
         self.K_epochs = 12
-        self.opposing_model_freeze_time = 2500
+        self.opposing_model_freeze_time = 1000
 
         self.current_stage = 1
-        self.stage1_steps = 500 # one team plays (typical positions) # bad
-        self.stage2_steps = 4500 # one team plays radomn locations 
+        self.stage1_steps = 00 # one team plays (typical positions) # bad
+        self.stage2_steps = 000 # one team plays radomn locations 
         self.stage3_steps = 30000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
@@ -64,14 +68,14 @@ class EnvironmentHyperparameters:
             return 
         self._initialized = True
 
-        # Options: train, test, play, replay
+        # Options: train, test, play, replay or train_parallel
         self.MODE = "train_parallel" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 1
-            self.GAME_DURATION = 60 #5* 60  # 5 minutes
+            self.NUMBER_OF_PLAYERS = 6
+            self.GAME_DURATION = 15 #5* 60  # 5 minutes
             self.RENDER = True
             self.CAP_FPS = True
 
@@ -88,23 +92,24 @@ class EnvironmentHyperparameters:
 
         else: # train or test
             model = "HUGO"
-            version = 3
-            sub_version = 5
-
+            version = 5    
+            sub_version = 6
             self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
-            self.Load_model = None
+            self.Load_model ="HUGO_3player_base"
             self.log_name = f"{model}_v{version}_sub{sub_version}_game"
             self.model = model
             self.log_interval = 2500
             self.NUMBER_OF_GAMES = 4
             self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 4
+            self.NUMBER_OF_PLAYERS = 3
             self.GAME_DURATION = 30 
             self.RENDER = False
             self.CAP_FPS = False
 
         self.RANDOMIZE_PLAYERS = False
         self.SIMPLE_GAME = False
+
+        self.STATS_UPDATE_INTERVAL = 1000
 
         self.AGENT_DECISION_RATE =  12 # Number of frames between agent decisions
 
@@ -126,6 +131,7 @@ class EnvironmentHyperparameters:
         self.BALL_POWER =  0.75 # player vs ball collision power
         self.KICK_SPEED = 15
 
+
         # Goal properties
         self.GOAL_WIDTH = 0.05 * self.WIDTH  # 5% of the screen width (65 pixels)
         self.GOAL_HEIGHT = 0.26 * self.HEIGHT  # 25% of the screen height (175 pixels)
@@ -140,6 +146,7 @@ class EnvironmentHyperparameters:
 
         self.PLAY_AREA_WIDTH = self.PLAY_AREA_RIGHT - self.PLAY_AREA_LEFT
         self.PLAY_AREA_HEIGHT = self.HEIGHT
+
 
         self.calculate_positions()
     
@@ -258,8 +265,6 @@ class VisualHyperparametters:
         self.BACKGROUND = "files/Images/Backgrounds/pitch.png"
 
         self.GOAL_SPRITE = "files/Images/Backgrounds/goal.png"
-
-        
 
         
 def print_hyper_params():

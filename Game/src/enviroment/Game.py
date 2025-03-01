@@ -9,6 +9,7 @@ from enviroment.Goal import Goal
 from functions.Logger import Logger
 from AI.StateParser import StateParser
 from AI.RewardFunction import RewardFunction 
+from functions.Statistics import GameStats
 
 
 # Instantiate Environment Hyperparameters as a global constant
@@ -64,7 +65,6 @@ class Game:
                 ))
 
         self.players = self.team_1 + self.team_2
-        self.ball_hits = 0
 
         # Initialize Ball
         random_x = random.random() * 5 - 2.5
@@ -72,6 +72,7 @@ class Game:
         self.ball = Ball(
             position=[ENV_PARAMS.WIDTH // 2 + random_y, ENV_PARAMS.HEIGHT // 2 + random_x],
         )
+        self.ball_hits = 0
         self.ball_power = ENV_PARAMS.BALL_POWER
         self.kick_speed = ENV_PARAMS.KICK_SPEED
 
@@ -122,6 +123,7 @@ class Game:
         # model stuff
         self.state_parser = StateParser(self)
         self.reward_function = RewardFunction(self)
+        self.stats = GameStats(self)
 
 
     def handle_collisions(self):
@@ -186,7 +188,8 @@ class Game:
             ball.velocity[0] -= (base_velocity) * direction_x
             ball.velocity[1] -= (base_velocity) * direction_y
 
-            print(f"ball velocity after: {ball.velocity}")
+            ball.last_hit_player_id = (player.team_id, player.player_id)
+
 
     def check_player_collision(self, player1, player2):
         """
@@ -401,6 +404,10 @@ class Game:
         input_update_interval = int(game_fps / ENV_PARAMS.AGENT_DECISION_RATE)
         frame_counter = 0
 
+        accumalated_rewards_team1 = [0] * len(self.team_1)
+        accumalated_rewards_team2 = [0] * len(self.team_2)
+        total_ball_distance = 0
+
         # Initialize last keys pressed
         last_keys = pygame.key.get_pressed()
 
@@ -437,10 +444,25 @@ class Game:
             # Handle collisions between players and the ball, and between players themselves
             self.handle_collisions()
 
+            ball_position = self.ball.position.copy()
+
             # Check for goals
             goal1, goal2 = self.check_goals()
-            reward = self.reward_function.calculate_rewards(goal1, goal2)
 
+            if not goal1 and not goal2:
+                total_ball_distance += math.hypot(ball_position[0] - self.ball.position[0], ball_position[1] - self.ball.position[1])
+
+            rewards = self.reward_function.calculate_rewards(goal1, goal2)
+            accumalated_rewards_team1 = [a + b for a, b in zip(accumalated_rewards_team1, rewards[:len(self.team_1)])]
+            accumalated_rewards_team2 = [a + b for a, b in zip(accumalated_rewards_team2, rewards[len(self.team_1):])]  
+
+
+            if frame_counter % input_update_interval == 0 or not running:
+                entropys = [0 for _ in range(len(self.team_1))]
+                self.stats.calculate_stats(sum(accumalated_rewards_team1), entropys, total_ball_distance)
+                total_ball_distance = 0
+                accumalated_rewards_team1 = [0] * len(self.team_1)
+                accumalated_rewards_team2 = [0] * len(self.team_2)
 
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
@@ -454,7 +476,9 @@ class Game:
             self.logger.close()
 
         # Clean up Pygame resources
-        return self.score_team1, self.score_team2
+        final = self.stats.final()
+        del self.stats
+        return final
  
 
     def replay(self, states):
@@ -516,15 +540,13 @@ class Game:
         Runs the main game loop.
         """
         running = True
-        total_rewards = []
-        total_ball_distance = 0
-        self.ball_hits = 0
-        entropy_list = []
+
 
         # rewards between action states
         accumalated_rewards_team1 = [0] * len(self.team_1)
         accumalated_rewards_team2 = [0] * len(self.team_2)
         acumalated_dones = []
+        total_ball_distance = 0
 
         team_playing = [1, 2]
         if current_stage == 1:  # only one team plays  - typical
@@ -583,11 +605,9 @@ class Game:
                 # Update actions for all players
                 if 1 in team_playing:
                     actions, entropys = model1.get_actions(states_team1)
-                    entropy_list.append(sum(entropys)/ len(entropys))
                     current_actions_team1 = actions
                 if 2 in team_playing:
                     actions, entropys= model2.get_actions(states_team2)
-                    entropy_list.append(sum(entropys)/ len(entropys))
                     current_actions_team2 = actions
 
             # Handle players' movement
@@ -622,9 +642,11 @@ class Game:
 
             if frame_counter % action_update_interval == 0 or not running:
                 done = any(acumalated_dones)
+
+                self.stats.calculate_stats(sum(accumalated_rewards_team1), entropys, total_ball_distance)
+                total_ball_distance = 0
                 
                 if 1 in team_playing:  
-                    total_rewards.append(sum(accumalated_rewards_team1))
                     model1.store_rewards(accumalated_rewards_team1, done)
                     accumalated_rewards_team1 = [0] * len(self.team_1)
                     acumalated_dones = []
@@ -632,8 +654,8 @@ class Game:
                     model2.store_rewards(accumalated_rewards_team2, done)
                     accumalated_rewards_team2 = [0] * len(self.team_2)
                     acumalated_dones = []
+            
           
-
             if self.log_name is not None:
                 self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
 
@@ -645,8 +667,7 @@ class Game:
         if self.log_name is not None:
             self.logger.close()
 
-        avg_reward = 100 * sum(total_rewards) / (ENV_PARAMS.NUMBER_OF_PLAYERS * 2 * ENV_PARAMS.FPS * ENV_PARAMS.GAME_DURATION)
+        final = self.stats.final()
+        del self.stats
 
-        avg_entropy = sum(entropy_list) / len(entropy_list)
-
-        return self.score_team1, self.score_team2, avg_reward, total_ball_distance, self.ball_hits, team_playing, avg_entropy
+        return final

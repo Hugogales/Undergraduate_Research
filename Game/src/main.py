@@ -9,6 +9,8 @@ from AI.MAAC import MAAC
 from AI.HUGO import HUGO
 import json
 from functions.Logger import Logger, set_parameters
+from functions.ELO import ELO
+from functions.Statistics import StatsHistoryViewer
 from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters, print_hyper_params
 import multiprocessing
 import time
@@ -26,12 +28,14 @@ print(f"Number of GPUs: {torch.cuda.device_count()}")
 def run_game(model, competing_model, filename, current_stage):
     filename = format_log_file(filename)
     game = Game(log_name=filename)
-    return game.run(model, competing_model, current_stage)
+    stats = game.run(model, competing_model, current_stage)
+    return stats.score[0], stats.score[1], stats.avg_reward, stats.ball_distance, stats.ball_hits, stats.avg_entropy, stats
 
 def play_game():
     filename = format_log_file("last_game")
     game = Game(log_name=filename)
-    score = game.run_play()
+    stats = game.run_play()
+    score = stats.score
 
     if score[0] > score[1]:
         print("Team 1 wins!")
@@ -39,6 +43,7 @@ def play_game():
         print("Team 2 wins!")
 
     print(f"Final score: {score}")
+    stats.print()
     pygame.quit()
 
 def replay_game():   
@@ -65,9 +70,14 @@ def train_PPO():
     AI_PARAMS = AIHyperparameters()
     start_time = time.time()
     pygame.init()
+    stats_history_viewer = StatsHistoryViewer(ENV_PARAMS.MODEL_NAME)
 
     ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage1_time
-    
+    elo_env = ELO()
+
+
+    model1_rating = elo_env.init_rating()
+    model2_rating = elo_env.init_rating()
 
     if ENV_PARAMS.model == "PPO_old":
         train_model = OldPPOAgent(mode="train")
@@ -95,7 +105,6 @@ def train_PPO():
         train_model.load_model(ENV_PARAMS.Load_model)
         competing_model.load_model(ENV_PARAMS.Load_model)
 
-    scores = []
     
     stage_counter = 0
     for epoch in tqdm(range(AI_PARAMS.episodes), desc="Training PPO"):
@@ -127,10 +136,17 @@ def train_PPO():
         if epoch % AI_PARAMS.opposing_model_freeze_time == 0: 
             competing_model.policy.load_state_dict(train_model.policy.state_dict())
             competing_model.policy_old.load_state_dict(train_model.policy_old.state_dict())
+            model2_rating = elo_env.create_rating(model1_rating.mu, model1_rating.sigma)
 
         # Collect experiences
-        score1, score2, avg_reward, ball_dist,ball_hits, team_playing, entropy = run_game(train_model, competing_model, filename, AI_PARAMS.current_stage)
-        scores.append((score1, score2))
+        score1, score2, avg_reward, ball_dist,ball_hits, entropy, stats = run_game(train_model, competing_model, filename, AI_PARAMS.current_stage)
+        stats_history_viewer.add(stats)
+
+        if AI_PARAMS.current_stage >= 3:
+            new_model1_rating, new_model2_rating = elo_env.calculate(model1_rating, model2_rating, score1, score2)
+            model1_rating = new_model1_rating
+        stats_history_viewer.add_elo(model1_rating)
+            # model2_rating = new_model2_rating keep the same rating for the competing model
 
         # train the model on episode
         train_model.update()
@@ -138,54 +154,18 @@ def train_PPO():
         # Calculate entropy
         entropy_percent = entropy / math.log(AI_PARAMS.ACTION_SIZE)
 
-        if epoch > 5:
-            break
-
+        if epoch % ENV_PARAMS.STATS_UPDATE_INTERVAL == 0 and epoch > 0:
+            stats_history_viewer.update()
+        
         # Log metrics
-        print(f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, team_playing: {team_playing}")
-        for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, team_playing: {team_playing}"):
+        print(f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}")
+        for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, ELO {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"):
             a=1
         if epoch % ENV_PARAMS.log_interval == 0:
             train_model.save_model(ENV_PARAMS.MODEL_NAME)
     
     pygame.quit()
-    
-    # Calculate total goals
-    goals = sum(score[0] + score[1] for score in scores)
-    team_1_score = sum(score[0] for score in scores)
-    team_2_score = sum(score[1] for score in scores)
 
-    total_score = (team_1_score, team_2_score)
-    diff = team_1_score - team_2_score
-    average_score = (team_1_score / (ENV_PARAMS.NUMBER_OF_GAMES* AI_PARAMS.episodes)
-                     , team_2_score / ENV_PARAMS.NUMBER_OF_GAMES * AI_PARAMS.episodes)
-
-    # Calculate times
-    real_time_taken = time.time() - start_time
-    real_time_per_game = real_time_taken / (ENV_PARAMS.NUMBER_OF_GAMES * AI_PARAMS.episodes)
-    ingame_time_played = ENV_PARAMS.NUMBER_OF_GAMES * ENV_PARAMS.GAME_DURATION
-    ingame_time_per_game = ENV_PARAMS.GAME_DURATION
-
-    # Prepare data for the table
-    data = [
-        ["REAL Time taken", format_time(real_time_taken)],
-        ["REAL Time per game", format_time(real_time_per_game)],
-        ["INGAME Time played", format_time(ingame_time_played)],
-        ["INGAME Time played per game", format_time(ingame_time_per_game)],
-    ]
-
-    data2 = [
-        ["Number of games", ENV_PARAMS.NUMBER_OF_GAMES],
-        ["Goals scored", goals],
-        ["Goals per game", f"{goals / ENV_PARAMS.NUMBER_OF_GAMES:.3f}"],
-        ["Total score", total_score],
-        ["Average score", str(average_score)],
-        ["Goal Differential", diff]
-    ]
-
-    # Print the table
-    print(tabulate(data, headers=["Metric", "Time"], tablefmt="pretty"))
-    print(tabulate(data2, headers=["Metric", "Value"], tablefmt="pretty"))
 
 import multiprocessing as mp
 import torch
@@ -212,18 +192,24 @@ def run_single_game(args):
     competing_model.assign_device(device)
     filename = format_log_file(filename)
     game = Game(log_name=filename)
-    output = game.run(model, competing_model, current_stage)
+    stats = game.run(model, competing_model, current_stage)
     memories = model.memories
+    output = (stats.score[0], stats.score[1], stats.avg_reward, stats.ball_distance, stats.ball_hits, stats.avg_entropy, stats)
     return output, memories
 
 def train_PPO_parralel():
-    
     ENV_PARAMS = EnvironmentHyperparameters()
     AI_PARAMS = AIHyperparameters()
 
     pygame.init()
     ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage1_time
     num_games = ENV_PARAMS.NUMBER_OF_GAMES
+
+    stats_history_viewer = StatsHistoryViewer(ENV_PARAMS.MODEL_NAME)
+
+    elo_env = ELO()
+    model1_rating = elo_env.init_rating()
+    model2_rating = elo_env.init_rating()
 
     if ENV_PARAMS.model == "PPO_old":
         train_model = OldPPOAgent(mode="train")
@@ -287,6 +273,7 @@ def train_PPO_parralel():
             if epoch % AI_PARAMS.opposing_model_freeze_time == 0:
                 competing_model.policy.load_state_dict(train_model.policy.state_dict())
                 competing_model.policy_old.load_state_dict(train_model.policy_old.state_dict())
+                model2_rating = elo_env.create_rating(model1_rating.mu, model1_rating.sigma)
             
             if torch.cuda.is_available():
                 args_list = [(train_model, competing_model, AI_PARAMS.current_stage, filename if i == 0 else None, i % torch.cuda.device_count()) for i in range(num_games)]
@@ -299,18 +286,24 @@ def train_PPO_parralel():
             # Combine results
             combined_memories = []
             score1 = score2 = avg_reward = ball_dist = ball_hits = entropy = 0
-            team_playing = None
 
             for (metrics, memories) in results:
-                s1, s2, ar, bd, bh, tp, en = metrics
+                s1, s2, ar, bd, bh, en, stats = metrics
                 score1 += s1
                 score2 += s2
                 avg_reward += ar
                 ball_dist += bd
                 ball_hits += bh
-                team_playing = tp
                 entropy += en
+                stats_history_viewer.add(stats)
                 combined_memories.append(memories)
+
+                if AI_PARAMS.current_stage >= 3:
+                    new_model1_rating, new_model2_rating = elo_env.calculate(model1_rating, model2_rating, score1, score2)
+                    model1_rating = new_model1_rating
+                    # model2_rating = new_model2_rating keep the same rating for the competing model
+            stats_history_viewer.combine_last_N(num_games)
+            stats_history_viewer.add_elo(model1_rating)
 
             score1 /= num_games
             score2 /= num_games
@@ -329,16 +322,22 @@ def train_PPO_parralel():
                 f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, "
                 f"Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, "
                 f"Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, "
-                f"team_playing: {team_playing},"
                 f"stage: {AI_PARAMS.current_stage}"
+                F"ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"
             )
-            for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, team_playing: {team_playing}, stage: {AI_PARAMS.current_stage}"):
+            for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, stage: {AI_PARAMS.current_stage}, ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"):
+                a=1
                 break
 
             if epoch % ENV_PARAMS.log_interval == 0:
                 train_model.save_model(ENV_PARAMS.MODEL_NAME)
 
+            if epoch % ENV_PARAMS.STATS_UPDATE_INTERVAL == 0 and epoch > 0:
+                stats_history_viewer.update()
+
     pygame.quit()
+
+import cProfile
 
 if __name__ == "__main__":
     ENV_PARAMS = EnvironmentHyperparameters()
@@ -348,6 +347,7 @@ if __name__ == "__main__":
     elif ENV_PARAMS.MODE == "replay":
         replay_game()
     elif ENV_PARAMS.MODE == "train":
+        #cProfile.run("train_PPO()", "train_stats.log")
         train_PPO()
     elif ENV_PARAMS.MODE == "train_parallel":
         mp.set_start_method("spawn", force=True)
