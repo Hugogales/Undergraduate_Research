@@ -26,27 +26,27 @@ class ActorCriticNetwork(nn.Module):
     def __init__(self, state_size, action_size):
         super(ActorCriticNetwork, self).__init__()
         self.actor = nn.Sequential(
-            nn.Linear(state_size, 1024),
+            nn.Linear(state_size, 526),
             nn.LeakyReLU(),
-            nn.Linear(1024, 1024),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(1024, 1024),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(1024, 512),
+            nn.Linear(526, 256),
             nn.LeakyReLU(),
-            nn.Linear(512, action_size),
+            nn.Linear(256, action_size),
         )
 
         self.critic = nn.Sequential(
-            nn.Linear(state_size + action_size, 1024),
+            nn.Linear(state_size + action_size, 526),
             nn.LeakyReLU(),
-            nn.Linear(1024, 1024),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(1024, 1024),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(1024, 512),
+            nn.Linear(526, 256),
             nn.LeakyReLU(),
-            nn.Linear(512, 1),
+            nn.Linear(256, 1),
         )
        
         AI_PARAMS = AIHyperparameters()
@@ -300,6 +300,7 @@ class PPOAgent:
         # Update old policy parameters with new policy parameters
         self.policy_old.load_state_dict(self.policy.state_dict())
         self.scheduler.step()
+        return 0
 
 
     

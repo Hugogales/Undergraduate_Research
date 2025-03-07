@@ -13,44 +13,42 @@ class AIHyperparameters:
 
         self.NOTE = ""
 
-        self.episodes = 60000
+        self.episodes = 80000
 
-        self.PLAYER_TO_BALL_REWARD_COEFF = 0.0002
-        self.BALL_TO_GOAL_REWARD_COEFF =  0.2
+        self.PLAYER_TO_BALL_REWARD_COEFF = 0.000
+        self.BALL_TO_GOAL_REWARD_COEFF =  0.1
         self.GOAL_REWARD = 500 
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
-        self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
-        self.ACTION_SIZE = 18
 
-        self.learning_rate = 1e-5 
-        self.min_learning_rate = 0.9e-5
+        self.learning_rate = 1.0e-5  * 1.5
+        self.min_learning_rate = 0.8e-5  * 1.5
 
         self.gamma = 0.98 # discount rate
         self.batch_size = 2048 
-        self.c_entropy = 0.001 # how much entropy is weighted
+        self.c_entropy = 0.02 # how much entropy is weighted
         self.temperature = 1
         self.max_grad_norm = 1000
         self.lam = 0.98 # GAE lambda
         self.c_value = 1 #5 how much critic loss is weighted
         self.TD_difference_N = 1
-        self.similarity_loss_coef = 0.001
+        self.similarity_loss_coef = 0.005
 
-        self.epsilon_clip = 0.12
+        self.epsilon_clip = 0.15
         self.K_epochs = 12
-        self.opposing_model_freeze_time = 1000
+        self.opposing_model_freeze_time = 10000
 
         self.current_stage = 1
-        self.stage1_steps = 00 # one team plays (typical positions) # bad
-        self.stage2_steps = 000 # one team plays radomn locations 
-        self.stage3_steps = 30000 # both teams play random locatoin
+        self.stage1_steps = 0 # one team plays (typical positions) # bad
+        self.stage2_steps = 40000 # one team plays radomn locations 
+        self.stage3_steps = 50000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
         self.stage1_time = 60 
         self.stage2_time = 60
-        self.stage3_time = 90
+        self.stage3_time = 75
         self.stage4_time = 90
 
 
@@ -69,7 +67,7 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay or train_parallel
-        self.MODE = "train_parallel" # train or test
+        self.MODE = "train" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
@@ -92,19 +90,19 @@ class EnvironmentHyperparameters:
 
         else: # train or test
             model = "HUGO"
-            version = 5    
-            sub_version = 6
+            version = 8
+            sub_version = 0
             self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
-            self.Load_model ="HUGO_3player_base"
+            self.Load_model = "HUGO_v8_sub0_good"
             self.log_name = f"{model}_v{version}_sub{sub_version}_game"
             self.model = model
             self.log_interval = 2500
             self.NUMBER_OF_GAMES = 4
             self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 3
+            self.NUMBER_OF_PLAYERS = 4
             self.GAME_DURATION = 30 
-            self.RENDER = False
-            self.CAP_FPS = False
+            self.RENDER = True
+            self.CAP_FPS = True
 
         self.RANDOMIZE_PLAYERS = False
         self.SIMPLE_GAME = False

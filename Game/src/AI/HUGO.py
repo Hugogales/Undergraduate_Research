@@ -125,6 +125,8 @@ class AttentionActorCriticNetwork(nn.Module):
         mask = torch.eye(N, device=x.device).unsqueeze(0).expand(B, -1, -1).bool() # [B, N, N]
         similarity_matrix = similarity_matrix.masked_fill(mask, 0) # [B, N, N]
         similarity_loss = torch.sum(similarity_matrix, dim=(1, 2)) / (N * (N - 1))  # [1]
+        # remove negative values
+        similarity_loss = torch.clamp(similarity_loss, min=-0.5)
         similarity_loss = similarity_loss.mean()
 
         return action_probs, similarity_loss
@@ -464,6 +466,8 @@ class HUGO: # Hierarchical Unified Generalized Optimization
         # Update old policy parameters with new policy parameters
         self.policy_old.load_state_dict(self.policy.state_dict())
         self.scheduler.step()
+
+        return similarity_loss.item()
 
     
     def compute_gae(self, rewards, dones, baseline_values):

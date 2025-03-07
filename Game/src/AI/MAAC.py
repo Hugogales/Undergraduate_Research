@@ -26,7 +26,7 @@ class Memory:
 
 class AttentionActorCriticNetwork(nn.Module):
     
-    def __init__(self, state_size, action_size, num_heads=4, embedding_dim=384):
+    def __init__(self, state_size, action_size, num_heads=4, embedding_dim=256):
         super(AttentionActorCriticNetwork, self).__init__()
 
         AI_PARAMS = AIHyperparameters()
@@ -35,19 +35,19 @@ class AttentionActorCriticNetwork(nn.Module):
         self.emb_dim = embedding_dim
 
         self.actor = nn.Sequential(
-            nn.Linear(state_size, 768),
+            nn.Linear(state_size, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, 768),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, 384),
+            nn.Linear(526, 256),
             nn.LeakyReLU(),
-            nn.Linear(384, action_size),
+            nn.Linear(256, action_size),
         )
 
         self.critic_embedding = nn.Sequential(
-            nn.Linear(state_size + action_size, 768),
+            nn.Linear(state_size + action_size, 526),
             nn.LeakyReLU(),
-            nn.Linear(768, embedding_dim),
+            nn.Linear(526, embedding_dim),
         )
 
         # 2) Multi-head self-attention block
@@ -60,9 +60,9 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) Actor head: transforms each post-attention embedding -> action logits
         self.critic_out = nn.Sequential(
-            nn.Linear(embedding_dim, 768),
+            nn.Linear(embedding_dim + embedding_dim, 526),
             nn.ReLU(),
-            nn.Linear(768, 1)
+            nn.Linear(526, 1)
         )
 
         print(f"number of parameters: {sum(p.numel() for p in self.parameters())}")
@@ -97,6 +97,7 @@ class AttentionActorCriticNetwork(nn.Module):
         critic_input = self.critic_embedding(critic_input) # [B*N, embedding_dim]
         critic_input = critic_input.reshape(B, N, -1) # [B, N, embedding_dim]
         attn_output, _ = self.critic_attention_block(critic_input, critic_input, critic_input) # [B, N, embedding_dim]
+        attn_output = torch.cat([critic_input, attn_output], dim=-1) # [B, N, 2*embedding_dim]
         values = self.critic_out(attn_output).squeeze(-1) # [B, N]
         values = values.reshape(B, N) # [B, N]
         return values
@@ -153,6 +154,7 @@ class AttentionActorCriticNetwork(nn.Module):
 
                 # Pass through attention
                 attn_output, _ = self.critic_attention_block(agent_emb_list, agent_emb_list, agent_emb_list) # [B*A, N, emb_dim]
+                attn_output = torch.cat([attn_output, agent_emb_list], dim=-1)  # [B*A, N, 2*emb_dim]
 
                 # Extract the i-th agent’s embedding 
                 agent_output = attn_output[:, i, :]  # [B*A, emb_dim]
@@ -348,7 +350,7 @@ class MAAC:
                 mini_gae_returns = gae_returns[start:end] # [mini_batch_size, N]
                 
                 # Forward pass
-                action_probs, similarity_loss = self.policy.actor_forward(mini_states) # [mini_batch_size, N, action_size]
+                action_probs = self.policy.actor_forward(mini_states) # [mini_batch_size, N, action_size]
                 state_values_new = self.policy.critic_forward(mini_states, mini_actions) # [mini_batch_size, N]
                 dist = torch.distributions.Categorical(action_probs) # [mini_batch_size, N]
                 action_log_probs = dist.log_prob(mini_actions) # [mini_batch_size, N]
@@ -409,6 +411,7 @@ class MAAC:
         # Update old policy parameters with new policy parameters
         self.policy_old.load_state_dict(self.policy.state_dict())
         self.scheduler.step()
+        return 0
 
     
     def compute_gae(self, rewards, dones, baseline_values):

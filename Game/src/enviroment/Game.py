@@ -9,6 +9,7 @@ from enviroment.Goal import Goal
 from functions.Logger import Logger
 from AI.StateParser import StateParser
 from AI.RewardFunction import RewardFunction 
+from AI.randmodel import RandomModel
 from functions.Statistics import GameStats
 
 
@@ -550,22 +551,20 @@ class Game:
 
         team_playing = [1, 2]
         if current_stage == 1:  # only one team plays  - typical
-            team_playing = [1]
+            model2 = RandomModel()
             self.randomize_players = False
             self.is_simple = False
             self.reset_game()
         elif current_stage == 2:  # one team plays random locations
-            team_playing = [1]
             self.randomize_players = True
+            model2 = RandomModel()
             self.is_simple = False
             self.reset_game()
         if current_stage == 3:  #  both teams play - random locations
-            team_playing = [1,2]
             self.randomize_players = True
             self.is_simple = False
             self.reset_game()
         elif current_stage == 4:  # both teams play - typical
-            team_playing = [1,2]
             self.randomize_players = False
             self.is_simple = False
             self.reset_game() 
@@ -607,7 +606,7 @@ class Game:
                     actions, entropys = model1.get_actions(states_team1)
                     current_actions_team1 = actions
                 if 2 in team_playing:
-                    actions, entropys= model2.get_actions(states_team2)
+                    actions, _ = model2.get_actions(states_team2)
                     current_actions_team2 = actions
 
             # Handle players' movement

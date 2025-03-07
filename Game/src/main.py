@@ -314,18 +314,19 @@ def train_PPO_parralel():
             combined_memories = [item for sublist in combined_memories for item in sublist]
             train_model.memories = combined_memories
 
-            train_model.update()
+            similarity_loss = train_model.update()
+            stats_history_viewer.add_similarity_loss(similarity_loss)
 
             entropy_percent = entropy / math.log(AI_PARAMS.ACTION_SIZE) if AI_PARAMS.ACTION_SIZE > 1 else 0
-
             print(
                 f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, "
                 f"Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, "
                 f"Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, "
                 f"stage: {AI_PARAMS.current_stage}"
                 F"ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"
+                f"similarity loss: {similarity_loss:.2f}"
             )
-            for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, stage: {AI_PARAMS.current_stage}, ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"):
+            for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, stage: {AI_PARAMS.current_stage}, ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}, similarity loss: {similarity_loss:.2f}"):
                 a=1
                 break
 

@@ -19,6 +19,7 @@ class GameStatsOutput:
         self.avg_frequency_possession_hit = avg_frequency_possession_hit
         self.avg_frequency_possession_distance = avg_frequency_possession_distance
         self.score = score
+
     
     def print(self):
         print("Ball hits: ", self.ball_hits)
@@ -48,6 +49,8 @@ class GameStats:
         self.rewards = []
         self.ball_distances = []
         self.entropies = []
+
+        self.last_hit_player_id = None
     
     def calculate_pairwise_distances(self, positions):
         """Calculate the pairwise distances between players."""
@@ -140,22 +143,15 @@ class GameStats:
         """
         # Calculate the distance between each player and the ball
         distances_team1 = [np.linalg.norm(np.array(ball_positions[0]) - np.array(pos)) for pos in positions_team1]
-        distances_team2 = [np.linalg.norm(np.array(ball_positions[0]) - np.array(pos)) for pos in positions_team2]
 
         # Find the player with the minimum distance to the ball
         min_distance_team1 = min(distances_team1)
-        min_distance_team2 = min(distances_team2)
     
-        team_id = 0
-        player_id = 0   
         # Determine the closest player
-        if min_distance_team1 < min_distance_team2:
-            closest_player = np.argmin(distances_team1)
-            team_id = 1
-            player_id = closest_player
+        closest_player = np.argmin(distances_team1)
+        team_id = 1
+        player_id = closest_player
 
-        
-    
         return (team_id, player_id)
 
     def calculate_stats(self, reward, entropy, ball_dist):
@@ -184,9 +180,13 @@ class GameStats:
             self.connectivity_team1.append(connectivy_team1)
             self.connectivity_team2.append(connectivity_team2)
 
-        # Calculate the hit possession
-        self.last_hit_player_id = self.game.ball.last_hit_player_id
-        self.posession_hit.append(self.last_hit_player_id)
+        # Calculate the hit possession of only team 1
+        last_hit_player_id = self.game.ball.last_hit_player_id
+        if self.last_hit_player_id != None and self.last_hit_player_id[0] == 1:
+            self.posession_hit.append(last_hit_player_id)
+            self.last_hit_player_id = last_hit_player_id
+        else:
+            self.posession_hit.append(self.last_hit_player_id)
 
         # Calculate the closest player to the ball
         self.posession_distance.append(self.calculate_closest_player_to_ball(positions_team1, positions_team2, ball_positions))
@@ -240,23 +240,23 @@ matplotlib.use('Agg')  # Use non-interactive backend for server environments
 import json
 from datetime import datetime
 import numpy as np
-        
 class StatsHistoryViewer:
+
     def __init__(self, model_name):
         self.model_name = model_name
-        
+                
         # Create a new folder for the model
         self.folder = "files/stats/" + model_name + "/"
         os.makedirs(self.folder, exist_ok=True)
         self.stats = []
         self.elos = []
-        
-        
+        self.similarity_losses = []
+                
         # Store libraries as instance attributes
         self.plt = plt
         self.json = json
         self.datetime = datetime
-        
+                
         # Set the style for plots
         plt.style.use('seaborn-v0_8')
         self.colors = {
@@ -264,15 +264,39 @@ class StatsHistoryViewer:
             'team2': '#FFD700',  # Yellow
             'background': '#FFFFFF',
             'text': '#333333',
-            'grid': '#DDDDDD'
+            'grid': '#DDDDDD',
+            'similarity': '#9932CC'  # Purple for similarity loss
         }
-
+                
+        # Window size for smoothing
+        self.smoothing_window = 5
+            
+    def _smooth_data(self, data, window=None):
+        """Apply moving average smoothing to data"""
+        if window is None:
+            window = self.smoothing_window
+                    
+        if len(data) < window:
+            return data
+                    
+        smoothed = []
+        for i in range(len(data)):
+            start = max(0, i - window // 2)
+            end = min(len(data), i + window // 2 + 1)
+            smoothed.append(sum(data[start:end]) / (end - start))
+        return smoothed
+        
+    # Keep existing add methods
     def add(self, stats):
         self.stats.append(stats)
-    
+            
     def add_elo(self, elo):
         self.elos.append(elo)
-
+        
+    def add_similarity_loss(self, similarity_loss):
+        self.similarity_losses.append(similarity_loss)
+                
+    
     def combine_last_N(self, N):
         """Combine the last N episodes into a single GameStatsOutput object."""
         last_N = self.stats[-N:]
@@ -303,6 +327,9 @@ class StatsHistoryViewer:
             score=score
         ))
         
+
+    # Keep combine_last_N and _to_serializable methods unchanged
+        
     def _to_serializable(self, obj):
         """Convert GameStatsOutput objects and NumPy types to JSON serializable objects."""
         
@@ -328,11 +355,13 @@ class StatsHistoryViewer:
             return obj.tolist()
         else:
             return obj
+
+            
     def _calculate_summary_stats(self):
         """Calculate summary statistics across all episodes."""
         if not self.stats:
             return {}
-                    
+                            
         summary = {
             'total_episodes': len(self.stats),
             'total_goals_team1': sum(s.score[0] for s in self.stats),
@@ -342,40 +371,36 @@ class StatsHistoryViewer:
             'draws': sum(1 for s in self.stats if s.score[0] == s.score[1]),
             'metrics': {}
         }
-                
+                        
         # Win percentage
         summary['win_rate_team1'] = summary['wins_team1'] / summary['total_episodes'] * 100
         summary['win_rate_team2'] = summary['wins_team2'] / summary['total_episodes'] * 100
-                
+                        
         # Calculate min, max, avg for each numerical metric
         metrics = [
             'ball_hits', 'ball_distance', 'avg_reward', 'avg_entropy',
             'avg_connectivity_team1', 'avg_connectivity_team2', 'avg_pairwise_distance',
             'avg_frequency_possession_hit', 'avg_frequency_possession_distance'
         ]
-                
+                        
         for metric in metrics:
             values = [getattr(s, metric) for s in self.stats]
             summary['metrics'][metric] = {
                 'min': min(values),
                 'max': max(values),
-                'avg': sum(values) / len(values),
-                'trend': 'improving' if len(values) > 5 and sum(values[-5:]) / 5 > sum(values[:5]) / 5 else 
-                            'declining' if len(values) > 5 and sum(values[-5:]) / 5 < sum(values[:5]) / 5 else 'stable'
+                'avg': sum(values) / len(values)
             }
-                
+                        
         # Add ELO metrics if available
         if self.elos:
             elo_metrics = {}
             if len(self.elos) > 0:
                 # Extract ELO values for team1 and team2
-                elos_team1 = [e[0].mu for e in self.elos]
-                elos_team2 = [e[1].mu for e in self.elos]
-                        
+                elos_team1 = [e.mu for e in self.elos]
+                                
                 # Calculate uncertainty (sigma)
-                sigmas_team1 = [e[0].sigma for e in self.elos]
-                sigmas_team2 = [e[1].sigma for e in self.elos]
-                        
+                sigmas_team1 = [e.sigma for e in self.elos]
+                                
                 elo_metrics['team1'] = {
                     'start': elos_team1[0] if elos_team1 else 0,
                     'current': elos_team1[-1] if elos_team1 else 0,
@@ -384,78 +409,96 @@ class StatsHistoryViewer:
                     'change': elos_team1[-1] - elos_team1[0] if len(elos_team1) > 1 else 0,
                     'uncertainty': sigmas_team1[-1] if sigmas_team1 else 0
                 }
-                        
-                elo_metrics['team2'] = {
-                    'start': elos_team2[0] if elos_team2 else 0,
-                    'current': elos_team2[-1] if elos_team2 else 0,
-                    'min': min(elos_team2) if elos_team2 else 0,
-                    'max': max(elos_team2) if elos_team2 else 0,
-                    'change': elos_team2[-1] - elos_team2[0] if len(elos_team2) > 1 else 0,
-                    'uncertainty': sigmas_team2[-1] if sigmas_team2 else 0
-                }
-                        
-                # ELO trend
-                elo_metrics['team1']['trend'] = 'improving' if elo_metrics['team1']['change'] > 0 else 'declining' if elo_metrics['team1']['change'] < 0 else 'stable'
-                elo_metrics['team2']['trend'] = 'improving' if elo_metrics['team2']['change'] > 0 else 'declining' if elo_metrics['team2']['change'] < 0 else 'stable'
-                        
                 summary['elo'] = elo_metrics
-                    
+                        
+        # Add similarity loss metrics if available
+        if self.similarity_losses:
+            summary['similarity_loss'] = {
+                'current': self.similarity_losses[-1],
+                'min': min(self.similarity_losses),
+                'max': max(self.similarity_losses),
+                'avg': sum(self.similarity_losses) / len(self.similarity_losses)
+            }
+                            
         return summary
-            
+                    
     def _create_plots(self):
         """Generate all plots from the stats history."""
         if not self.stats:
             return {}
-                    
+                            
         plots = {}
         episodes = range(1, len(self.stats) + 1)
-                
+                        
         # Create figure directory
         fig_dir = os.path.join(self.folder, 'figures')
         os.makedirs(fig_dir, exist_ok=True)
-                
-        # 1. Team connectivity plot
+                        
+        # 1. Team connectivity plot (smoothed)
         fig, ax = self.plt.subplots(figsize=(10, 6))
-        ax.plot(episodes, [s.avg_connectivity_team1 for s in self.stats], 
+        connectivity_team1 = [s.avg_connectivity_team1 for s in self.stats]
+        connectivity_team2 = [s.avg_connectivity_team2 for s in self.stats]
+                
+        # Apply smoothing
+        smooth_conn_team1 = self._smooth_data(connectivity_team1)
+        smooth_conn_team2 = self._smooth_data(connectivity_team2)
+                
+        ax.plot(episodes, smooth_conn_team1, 
                 color=self.colors['team1'], label='Team 1', linewidth=2)
-        ax.plot(episodes, [s.avg_connectivity_team2 for s in self.stats], 
+        ax.plot(episodes, smooth_conn_team2, 
                 color=self.colors['team2'], label='Team 2', linewidth=2)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Average Connectivity')
-        ax.set_title('Team Connectivity Over Time')
+        ax.set_title('Team Connectivity Over Time (Smoothed)')
         ax.legend()
         ax.grid(True, color=self.colors['grid'])
         connectivity_path = os.path.join(fig_dir, 'connectivity.png')
         fig.savefig(connectivity_path)
         plots['connectivity'] = os.path.basename(connectivity_path)
         self.plt.close(fig)
-                
-        # 2. Score plot
+                        
+        # 2. Score plot (goal differential)
         fig, ax = self.plt.subplots(figsize=(10, 6))
-        ax.bar(episodes, [s.score[0] for s in self.stats], 
-                color=self.colors['team1'], label='Team 1', alpha=0.7, width=0.4)
-        ax.bar([e + 0.4 for e in episodes], [s.score[1] for s in self.stats], 
-                color=self.colors['team2'], label='Team 2', alpha=0.7, width=0.4)
+        # Calculate goal differential (team1 - team2)
+        goal_diff = [s.score[0] - s.score[1] for s in self.stats]
+        goal_diff_smooth = self._smooth_data(goal_diff)
+                
+        # Plot as a line chart with zero line
+        ax.axhline(y=0, color='gray', linestyle='-', alpha=0.5)
+        ax.plot(episodes, goal_diff_smooth, color='blue', linewidth=2)
+        ax.fill_between(episodes, 0, goal_diff_smooth, 
+                        where=[gd > 0 for gd in goal_diff_smooth], 
+                        color=self.colors['team1'], alpha=0.3)
+        ax.fill_between(episodes, 0, goal_diff_smooth, 
+                        where=[gd < 0 for gd in goal_diff_smooth], 
+                        color=self.colors['team2'], alpha=0.3)
+                
         ax.set_xlabel('Episode')
-        ax.set_ylabel('Goals')
-        ax.set_title('Match Scores by Episode')
-        ax.legend()
-        score_path = os.path.join(fig_dir, 'score.png')
+        ax.set_ylabel('Goal Differential (Team 1 - Team 2)')
+        ax.set_title('Smoothed Goal Differential Over Time')
+        score_path = os.path.join(fig_dir, 'goal_differential.png')
         fig.savefig(score_path)
         plots['score'] = os.path.basename(score_path)
         self.plt.close(fig)
-                
-        # 3. Ball metrics plot
+                        
+        # 3. Ball metrics plot (smoothed)
         fig, ax = self.plt.subplots(figsize=(10, 6))
-        ax.plot(episodes, [s.ball_hits for s in self.stats], 
+        ball_hits = [s.ball_hits for s in self.stats]
+        ball_distance = [s.ball_distance for s in self.stats]
+                
+        # Apply smoothing
+        smooth_hits = self._smooth_data(ball_hits)
+        smooth_distance = self._smooth_data(ball_distance)
+                
+        ax.plot(episodes, smooth_hits, 
                 color='blue', label='Ball Hits', linewidth=2)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Number of Ball Hits')
         ax2 = ax.twinx()
-        ax2.plot(episodes, [s.ball_distance for s in self.stats], 
-                    color='green', label='Ball Distance', linewidth=2, linestyle='--')
+        ax2.plot(episodes, smooth_distance, 
+                color='green', label='Ball Distance', linewidth=2, linestyle='--')
         ax2.set_ylabel('Ball Distance')
-        ax.set_title('Ball Metrics Over Time')
+        ax.set_title('Ball Metrics Over Time (Smoothed)')
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
@@ -463,18 +506,25 @@ class StatsHistoryViewer:
         fig.savefig(ball_metrics_path)
         plots['ball_metrics'] = os.path.basename(ball_metrics_path)
         self.plt.close(fig)
-                
-        # 4. Reward and Entropy plot
+                        
+        # 4. Reward and Entropy plot (smoothed)
         fig, ax = self.plt.subplots(figsize=(10, 6))
-        ax.plot(episodes, [s.avg_reward for s in self.stats], 
+        rewards = [s.avg_reward for s in self.stats]
+        entropies = [s.avg_entropy for s in self.stats]
+                
+        # Apply smoothing
+        smooth_rewards = self._smooth_data(rewards)
+        smooth_entropies = self._smooth_data(entropies)
+                
+        ax.plot(episodes, smooth_rewards, 
                 color='purple', label='Average Reward', linewidth=2)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Average Reward')
         ax2 = ax.twinx()
-        ax2.plot(episodes, [s.avg_entropy for s in self.stats], 
-                    color='orange', label='Average Entropy', linewidth=2, linestyle='--')
+        ax2.plot(episodes, smooth_entropies, 
+                color='orange', label='Average Entropy', linewidth=2, linestyle='--')
         ax2.set_ylabel('Average Entropy')
-        ax.set_title('Training Metrics Over Time')
+        ax.set_title('Training Metrics Over Time (Smoothed)')
         lines1, labels1 = ax.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
@@ -482,69 +532,73 @@ class StatsHistoryViewer:
         fig.savefig(training_metrics_path)
         plots['training_metrics'] = os.path.basename(training_metrics_path)
         self.plt.close(fig)
-                
-        # 5. Possession metrics
+                        
+        # 5. Possession metrics (smoothed)
         fig, ax = self.plt.subplots(figsize=(10, 6))
-        ax.plot(episodes, [s.avg_frequency_possession_hit for s in self.stats], 
+        poss_hit = [s.avg_frequency_possession_hit for s in self.stats]
+        poss_dist = [s.avg_frequency_possession_distance for s in self.stats]
+                
+        # Apply smoothing
+        smooth_poss_hit = self._smooth_data(poss_hit)
+        smooth_poss_dist = self._smooth_data(poss_dist)
+                
+        ax.plot(episodes, smooth_poss_hit, 
                 color=self.colors['team1'], label='Hit-based Possession Changes', linewidth=2)
-        ax.plot(episodes, [s.avg_frequency_possession_distance for s in self.stats], 
+        ax.plot(episodes, smooth_poss_dist, 
                 color=self.colors['team2'], label='Distance-based Possession Changes', linewidth=2)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Average Frequency')
-        ax.set_title('Possession Changes Over Time')
+        ax.set_title('Possession Changes Over Time (Smoothed)')
         ax.legend()
         ax.grid(True, color=self.colors['grid'])
         possession_path = os.path.join(fig_dir, 'possession.png')
         fig.savefig(possession_path)
         plots['possession'] = os.path.basename(possession_path)
         self.plt.close(fig)
-                
-        # 6. Pairwise distance
+                        
+        # 6. Pairwise distance (smoothed)
         fig, ax = self.plt.subplots(figsize=(10, 6))
-        ax.plot(episodes, [s.avg_pairwise_distance for s in self.stats], 
+        distances = [s.avg_pairwise_distance for s in self.stats]
+                
+        # Apply smoothing
+        smooth_distances = self._smooth_data(distances)
+                
+        ax.plot(episodes, smooth_distances, 
                 color='teal', linewidth=2)
         ax.set_xlabel('Episode')
         ax.set_ylabel('Average Pairwise Distance')
-        ax.set_title('Team Formation Spread Over Time')
+        ax.set_title('Team Formation Spread Over Time (Smoothed)')
         ax.grid(True, color=self.colors['grid'])
         distance_path = os.path.join(fig_dir, 'pairwise_distance.png')
         fig.savefig(distance_path)
         plots['pairwise_distance'] = os.path.basename(distance_path)
         self.plt.close(fig)
-                
-        # 7. NEW: ELO Rating plot
+                        
+        # 7. ELO Rating plot (smoothed)
         if self.elos and len(self.elos) > 0:
             elo_episodes = range(1, len(self.elos) + 1)
             fig, ax = self.plt.subplots(figsize=(10, 6))
+                            
+            # Extract ratings
+            elos_team1 = [e.mu for e in self.elos]
+            sigma_team1 = [e.sigma for e in self.elos]
                     
-            if isinstance(self.elos[0], tuple) and len(self.elos[0]) == 2:
-                # Extract ratings
-                elos_team1 = [e[0].mu for e in self.elos]
-                elos_team2 = [e[1].mu for e in self.elos]
-                        
-                # Plot with confidence intervals (shaded regions)
-                sigma_team1 = [e[0].sigma for e in self.elos]
-                sigma_team2 = [e[1].sigma for e in self.elos]
-                        
-                # Plot the ratings
-                ax.plot(elo_episodes, elos_team1, color=self.colors['team1'], 
-                        label='Team 1 Rating', linewidth=2)
-                ax.plot(elo_episodes, elos_team2, color=self.colors['team2'], 
-                        label='Team 2 Rating', linewidth=2)
-                        
-                # Add confidence intervals (±3 sigma)
-                ax.fill_between(elo_episodes, 
-                                [mu - 3*sigma for mu, sigma in zip(elos_team1, sigma_team1)],
-                                [mu + 3*sigma for mu, sigma in zip(elos_team1, sigma_team1)],
-                                color=self.colors['team1'], alpha=0.2)
-                ax.fill_between(elo_episodes, 
-                                [mu - 3*sigma for mu, sigma in zip(elos_team2, sigma_team2)],
-                                [mu + 3*sigma for mu, sigma in zip(elos_team2, sigma_team2)],
-                                color=self.colors['team2'], alpha=0.2)
-                        
+            # Apply smoothing
+            smooth_elos = self._smooth_data(elos_team1)
+                                
+            # Plot the ratings
+            ax.plot(elo_episodes, smooth_elos, color=self.colors['team1'], 
+                    label='Team 1 Rating', linewidth=2)
+                                
+            # Add confidence intervals (±3 sigma)
+            ax.fill_between(elo_episodes, 
+                            [mu - 3*sigma for mu, sigma in zip(smooth_elos, sigma_team1)],
+                            [mu + 3*sigma for mu, sigma in zip(smooth_elos, sigma_team1)],
+                            color=self.colors['team1'], alpha=0.2)
+                                
             ax.set_xlabel('Episode')
             ax.set_ylabel('ELO Rating')
-            ax.set_title('Team ELO Ratings Over Time')
+            ax.set_title('Team ELO Ratings Over Time (Smoothed)')
             ax.legend()
             ax.grid(True, color=self.colors['grid'])
             elo_path = os.path.join(fig_dir, 'elo_ratings.png')
@@ -552,8 +606,31 @@ class StatsHistoryViewer:
             plots['elo_ratings'] = os.path.basename(elo_path)
             self.plt.close(fig)
                 
+        # 8. NEW: Similarity Loss plot
+        if self.similarity_losses and len(self.similarity_losses) > 0:
+            sim_episodes = range(1, len(self.similarity_losses) + 1)
+            fig, ax = self.plt.subplots(figsize=(10, 6))
+                    
+            # Apply smoothing
+            smooth_sim_loss = self._smooth_data(self.similarity_losses)
+                    
+            # Plot the similarity loss
+            ax.plot(sim_episodes, smooth_sim_loss, color=self.colors['similarity'], 
+                    label='Similarity Loss', linewidth=2)
+                    
+            ax.set_xlabel('Episode')
+            ax.set_ylabel('Similarity Loss')
+            ax.set_title('Agent Similarity Loss Over Time (Smoothed)')
+            ax.legend()
+            ax.grid(True, color=self.colors['grid'])
+            sim_path = os.path.join(fig_dir, 'similarity_loss.png')
+            fig.savefig(sim_path)
+            plots['similarity_loss'] = os.path.basename(sim_path)
+            self.plt.close(fig)
+                        
         return plots
             
+        
     def _generate_html(self, summary, plots):
         """Generate a beautiful HTML report."""
         html_template = """
@@ -635,15 +712,6 @@ class StatsHistoryViewer:
                 th {
                     background-color: #f2f2f2;
                 }
-                .trend-improving {
-                    color: green;
-                }
-                .trend-declining {
-                    color: red;
-                }
-                .trend-stable {
-                    color: blue;
-                }
                 .footer {
                     text-align: center;
                     margin-top: 30px;
@@ -669,7 +737,7 @@ class StatsHistoryViewer:
                 <h1>{{model_name}} - Training Statistics</h1>
                 <p>Generated on {{timestamp}}</p>
             </div>
-                    
+                            
             <div class="card">
                 <h2>Summary</h2>
                 <div class="metrics-grid">
@@ -697,20 +765,23 @@ class StatsHistoryViewer:
                         <div class="value">{{summary.win_rate_team2|round(1)}}%</div>
                         <div class="label">Team 2 Win Rate</div>
                     </div>
-                            
+                                    
                     {% if summary.elo %}
                     <div class="metric">
                         <div class="value">{{summary.elo.team1.current|round(1)}}</div>
-                        <div class="label">Team 1 ELO Rating</div>
+                        <div class="label">Agent ELO Rating</div>
                     </div>
+                    {% endif %}
+                            
+                    {% if summary.similarity_loss %}
                     <div class="metric">
-                        <div class="value">{{summary.elo.team2.current|round(1)}}</div>
-                        <div class="label">Team 2 ELO Rating</div>
+                        <div class="value">{{summary.similarity_loss.current|round(6)}}</div>
+                        <div class="label">Similarity Loss</div>
                     </div>
                     {% endif %}
                 </div>
             </div>
-                    
+                            
             <div class="card">
                 <h2>Key Metrics Overview</h2>
                 <table>
@@ -719,7 +790,6 @@ class StatsHistoryViewer:
                         <th>Average</th>
                         <th>Min</th>
                         <th>Max</th>
-                        <th>Trend</th>
                     </tr>
                     {% for metric, data in summary.metrics.items() %}
                     <tr>
@@ -727,29 +797,29 @@ class StatsHistoryViewer:
                         <td>{{ data.avg|round(3) }}</td>
                         <td>{{ data.min|round(3) }}</td>
                         <td>{{ data.max|round(3) }}</td>
-                        <td class="trend-{{ data.trend }}">{{ data.trend|title }}</td>
                     </tr>
                     {% endfor %}
-                            
+                                    
                     {% if summary.elo %}
                     <tr>
-                        <td>Team 1 ELO Rating</td>
+                        <td>Agent ELO Rating</td>
                         <td>{{ summary.elo.team1.current|round(1) }}</td>
                         <td>{{ summary.elo.team1.min|round(1) }}</td>
                         <td>{{ summary.elo.team1.max|round(1) }}</td>
-                        <td class="trend-{{ summary.elo.team1.trend }}">{{ summary.elo.team1.trend|title }}</td>
                     </tr>
+                    {% endif %}
+                            
+                    {% if summary.similarity_loss %}
                     <tr>
-                        <td>Team 2 ELO Rating</td>
-                        <td>{{ summary.elo.team2.current|round(1) }}</td>
-                        <td>{{ summary.elo.team2.min|round(1) }}</td>
-                        <td>{{ summary.elo.team2.max|round(1) }}</td>
-                        <td class="trend-{{ summary.elo.team2.trend }}">{{ summary.elo.team2.trend|title }}</td>
+                        <td>Similarity Loss</td>
+                        <td>{{ summary.similarity_loss.avg|round(6) }}</td>
+                        <td>{{ summary.similarity_loss.min|round(6) }}</td>
+                        <td>{{ summary.similarity_loss.max|round(6) }}</td>
                     </tr>
                     {% endif %}
                 </table>
             </div>
-                    
+                            
             {% if latest %}
             <div class="card">
                 <h2>Latest Game Results</h2>
@@ -779,40 +849,43 @@ class StatsHistoryViewer:
                         <div class="value">{{ latest.avg_connectivity_team2|round(3) }}</div>
                         <div class="label">Team 2 Connectivity</div>
                     </div>
-                            
+                                    
                     {% if summary.elo %}
                     <div class="metric">
                         <div class="value">{{ summary.elo.team1.current|round(1) }}</div>
-                        <div class="label">Team 1 ELO</div>
+                        <div class="label">Agent ELO</div>
                     </div>
+                    {% endif %}
+                            
+                    {% if summary.similarity_loss %}
                     <div class="metric">
-                        <div class="value">{{ summary.elo.team2.current|round(1) }}</div>
-                        <div class="label">Team 2 ELO</div>
+                        <div class="value">{{ summary.similarity_loss.current|round(6) }}</div>
+                        <div class="label">Similarity Loss</div>
                     </div>
                     {% endif %}
                 </div>
             </div>
             {% endif %}
-                    
+                            
             <div class="card">
                 <h2>Team Performance</h2>
                 <div class="plot">
-                    <h3>Team Score Comparison</h3>
-                    <img src="figures/{{ plots.score }}" alt="Scores">
+                    <h3>Goal Differential Over Time</h3>
+                    <img src="figures/{{ plots.score }}" alt="Goal Differential">
                 </div>
                 <div class="plot">
                     <h3>Team Connectivity</h3>
                     <img src="figures/{{ plots.connectivity }}" alt="Team Connectivity">
                 </div>
-                        
+                                
                 {% if plots.elo_ratings %}
                 <div class="plot">
-                    <h3>ELO Ratings</h3>
+                    <h3>Agent ELO Rating Over Time</h3>
                     <img src="figures/{{ plots.elo_ratings }}" alt="ELO Ratings">
                 </div>
                 {% endif %}
             </div>
-                    
+                            
             <div class="card">
                 <h2>Ball Metrics</h2>
                 <div class="plot">
@@ -824,7 +897,7 @@ class StatsHistoryViewer:
                     <img src="figures/{{ plots.possession }}" alt="Possession Changes">
                 </div>
             </div>
-                    
+                            
             <div class="card">
                 <h2>Training Progress</h2>
                 <div class="plot">
@@ -835,22 +908,29 @@ class StatsHistoryViewer:
                     <h3>Team Formation (Pairwise Distance)</h3>
                     <img src="figures/{{ plots.pairwise_distance }}" alt="Pairwise Distance">
                 </div>
+                        
+                {% if plots.similarity_loss %}
+                <div class="plot">
+                    <h3>Similarity Loss</h3>
+                    <img src="figures/{{ plots.similarity_loss }}" alt="Similarity Loss">
+                </div>
+                {% endif %}
             </div>
-                    
+                            
             <div class="footer">
                 <p>Generated for {{model_name}} using UR Game Stats Viewer | {{timestamp}}</p>
             </div>
         </body>
         </html>
         """
-                
+                        
         # Use Jinja2 for templating
         from jinja2 import Template
         template = Template(html_template)
-                
+                        
         latest = self.stats[-1] if self.stats else None
         timestamp = self.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
+                        
         html_content = template.render(
             model_name=self.model_name,
             summary=summary,
@@ -858,8 +938,11 @@ class StatsHistoryViewer:
             latest=latest,
             timestamp=timestamp
         )
-                
+                        
         return html_content
+
+
+
     def update(self):
         """Generate updated statistics, plots, and HTML report."""
         if not self.stats:

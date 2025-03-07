@@ -1,0 +1,346 @@
+
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>HUGO_v5_sub4 - Training Statistics</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #f9f9f9;
+                }
+                .header {
+                    background: linear-gradient(135deg, #FF0000, #FFD700);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    text-align: center;
+                }
+                h1, h2, h3 {
+                    margin-top: 0;
+                }
+                .card {
+                    background: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .metric {
+                    display: inline-block;
+                    background: #f5f5f5;
+                    padding: 15px;
+                    border-radius: 8px;
+                    margin: 10px;
+                    min-width: 150px;
+                    text-align: center;
+                }
+                .metric .value {
+                    font-size: 24px;
+                    font-weight: bold;
+                    color: #FF0000;
+                }
+                .metric .label {
+                    font-size: 14px;
+                    color: #666;
+                }
+                .plot {
+                    margin-top: 20px;
+                    text-align: center;
+                }
+                .plot img {
+                    max-width: 100%;
+                    height: auto;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin: 20px 0;
+                }
+                table, th, td {
+                    border: 1px solid #ddd;
+                }
+                th, td {
+                    padding: 12px;
+                    text-align: left;
+                }
+                th {
+                    background-color: #f2f2f2;
+                }
+                .footer {
+                    text-align: center;
+                    margin-top: 30px;
+                    color: #666;
+                    font-size: 14px;
+                }
+                .team1 {
+                    color: #FF0000;
+                }
+                .team2 {
+                    color: #FFD700;
+                }
+                .metrics-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                    gap: 15px;
+                    margin: 20px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>HUGO_v5_sub4 - Training Statistics</h1>
+                <p>Generated on 2025-03-03 07:02:58</p>
+            </div>
+                            
+            <div class="card">
+                <h2>Summary</h2>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <div class="value">12001</div>
+                        <div class="label">Total Episodes</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">596</div>
+                        <div class="label">Team 1 Wins</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">9426</div>
+                        <div class="label">Team 2 Wins</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">1979</div>
+                        <div class="label">Draws</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">5.0%</div>
+                        <div class="label">Team 1 Win Rate</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">78.5%</div>
+                        <div class="label">Team 2 Win Rate</div>
+                    </div>
+                                    
+                    
+                    <div class="metric">
+                        <div class="value">856.8</div>
+                        <div class="label">Agent ELO Rating</div>
+                    </div>
+                    
+                            
+                    
+                    <div class="metric">
+                        <div class="value">0.002334</div>
+                        <div class="label">Similarity Loss</div>
+                    </div>
+                    
+                </div>
+            </div>
+                            
+            <div class="card">
+                <h2>Key Metrics Overview</h2>
+                <table>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Average</th>
+                        <th>Min</th>
+                        <th>Max</th>
+                    </tr>
+                    
+                    <tr>
+                        <td>Ball Hits</td>
+                        <td>194.038</td>
+                        <td>0.0</td>
+                        <td>3563.5</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Ball Distance</td>
+                        <td>12440.58</td>
+                        <td>0.0</td>
+                        <td>25613.011</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Reward</td>
+                        <td>-14.26</td>
+                        <td>-58.417</td>
+                        <td>14.937</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Entropy</td>
+                        <td>0.948</td>
+                        <td>0.276</td>
+                        <td>2.854</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Connectivity Team1</td>
+                        <td>0.658</td>
+                        <td>0.033</td>
+                        <td>0.902</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Connectivity Team2</td>
+                        <td>0.202</td>
+                        <td>0.022</td>
+                        <td>0.833</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Pairwise Distance</td>
+                        <td>335.575</td>
+                        <td>48.419</td>
+                        <td>718.106</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Frequency Possession Hit</td>
+                        <td>0.0</td>
+                        <td>0.0</td>
+                        <td>0.0</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Avg Frequency Possession Distance</td>
+                        <td>0.038</td>
+                        <td>0.006</td>
+                        <td>0.097</td>
+                    </tr>
+                    
+                                    
+                    
+                    <tr>
+                        <td>Agent ELO Rating</td>
+                        <td>856.8</td>
+                        <td>837.9</td>
+                        <td>1162.8</td>
+                    </tr>
+                    
+                            
+                    
+                    <tr>
+                        <td>Similarity Loss</td>
+                        <td>0.12047</td>
+                        <td>0.0</td>
+                        <td>0.980562</td>
+                    </tr>
+                    
+                </table>
+            </div>
+                            
+            
+            <div class="card">
+                <h2>Latest Game Results</h2>
+                <h3>Score: <span class="team1">Team 1: 0.0</span> - <span class="team2">Team 2: 0.0</span></h3>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <div class="value">1.0</div>
+                        <div class="label">Ball Hits</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">425.5</div>
+                        <div class="label">Ball Distance</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">-0.179</div>
+                        <div class="label">Avg Reward</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">2.854</div>
+                        <div class="label">Avg Entropy</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">0.732</div>
+                        <div class="label">Team 1 Connectivity</div>
+                    </div>
+                    <div class="metric">
+                        <div class="value">0.651</div>
+                        <div class="label">Team 2 Connectivity</div>
+                    </div>
+                                    
+                    
+                    <div class="metric">
+                        <div class="value">856.8</div>
+                        <div class="label">Agent ELO</div>
+                    </div>
+                    
+                            
+                    
+                    <div class="metric">
+                        <div class="value">0.002334</div>
+                        <div class="label">Similarity Loss</div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+                            
+            <div class="card">
+                <h2>Team Performance</h2>
+                <div class="plot">
+                    <h3>Goal Differential Over Time</h3>
+                    <img src="figures/goal_differential.png" alt="Goal Differential">
+                </div>
+                <div class="plot">
+                    <h3>Team Connectivity</h3>
+                    <img src="figures/connectivity.png" alt="Team Connectivity">
+                </div>
+                                
+                
+                <div class="plot">
+                    <h3>Agent ELO Rating Over Time</h3>
+                    <img src="figures/elo_ratings.png" alt="ELO Ratings">
+                </div>
+                
+            </div>
+                            
+            <div class="card">
+                <h2>Ball Metrics</h2>
+                <div class="plot">
+                    <h3>Ball Hits and Distance</h3>
+                    <img src="figures/ball_metrics.png" alt="Ball Metrics">
+                </div>
+                <div class="plot">
+                    <h3>Possession Changes</h3>
+                    <img src="figures/possession.png" alt="Possession Changes">
+                </div>
+            </div>
+                            
+            <div class="card">
+                <h2>Training Progress</h2>
+                <div class="plot">
+                    <h3>Reward and Entropy</h3>
+                    <img src="figures/training_metrics.png" alt="Training Metrics">
+                </div>
+                <div class="plot">
+                    <h3>Team Formation (Pairwise Distance)</h3>
+                    <img src="figures/pairwise_distance.png" alt="Pairwise Distance">
+                </div>
+                        
+                
+                <div class="plot">
+                    <h3>Similarity Loss</h3>
+                    <img src="figures/similarity_loss.png" alt="Similarity Loss">
+                </div>
+                
+            </div>
+                            
+            <div class="footer">
+                <p>Generated for HUGO_v5_sub4 using UR Game Stats Viewer | 2025-03-03 07:02:58</p>
+            </div>
+        </body>
+        </html>
+        
