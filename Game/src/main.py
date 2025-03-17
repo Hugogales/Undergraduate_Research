@@ -1,6 +1,7 @@
 from enviroment.Game import Game
 from tqdm import tqdm
 from functions.General import format_time, format_log_file
+from functions.league import League
 from AI.randmodel import RandomModel
 from AI.OldPPO import OldPPOAgent
 from AI.BadTransformer import BadTransformerPPOAgent
@@ -13,6 +14,7 @@ from functions.ELO import ELO
 from functions.Statistics import StatsHistoryViewer
 from params import EnvironmentHyperparameters, VisualHyperparametters, AIHyperparameters, print_hyper_params
 import multiprocessing
+import random
 import time
 import math
 import pygame
@@ -76,8 +78,8 @@ def train_PPO():
     elo_env = ELO()
 
 
+
     model1_rating = elo_env.init_rating()
-    model2_rating = elo_env.init_rating()
 
     if ENV_PARAMS.model == "PPO_old":
         train_model = OldPPOAgent(mode="train")
@@ -101,11 +103,14 @@ def train_PPO():
     competing_model.policy.requires_grad = False
     competing_model.policy_old.requires_grad = False
 
+
+
     if ENV_PARAMS.Load_model:
         train_model.load_model(ENV_PARAMS.Load_model)
-        competing_model.load_model(ENV_PARAMS.Load_model)
 
-    
+    league = League(elo_env, competing_model)
+    league.add_player(train_model, elo=elo_env.init_rating())   
+
     stage_counter = 0
     for epoch in tqdm(range(AI_PARAMS.episodes), desc="Training PPO"):
         if AI_PARAMS.current_stage == 1 and stage_counter >= AI_PARAMS.stage1_steps:
@@ -133,20 +138,19 @@ def train_PPO():
             filename = None
 
         # Update competing model
-        if epoch % AI_PARAMS.opposing_model_freeze_time == 0: 
-            competing_model.policy.load_state_dict(train_model.policy.state_dict())
-            competing_model.policy_old.load_state_dict(train_model.policy_old.state_dict())
-            model2_rating = elo_env.create_rating(model1_rating.mu, model1_rating.sigma)
+        competing_model, model2_rating = league.sample_player()
 
         # Collect experiences
         score1, score2, avg_reward, ball_dist,ball_hits, entropy, stats = run_game(train_model, competing_model, filename, AI_PARAMS.current_stage)
         stats_history_viewer.add(stats)
 
-        if AI_PARAMS.current_stage >= 3:
+        if AI_PARAMS.current_stage >= 3 and model2_rating is not None:
             new_model1_rating, new_model2_rating = elo_env.calculate(model1_rating, model2_rating, score1, score2)
             model1_rating = new_model1_rating
         stats_history_viewer.add_elo(model1_rating)
             # model2_rating = new_model2_rating keep the same rating for the competing model
+        
+        league.update(train_model)
 
         # train the model on episode
         train_model.update()
@@ -158,6 +162,8 @@ def train_PPO():
             stats_history_viewer.update()
         
         # Log metrics
+        if model2_rating is None:
+            model2_rating = elo_env.create_rating(1, 1)
         print(f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}")
         for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, ELO {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"):
             a=1
@@ -209,7 +215,6 @@ def train_PPO_parralel():
 
     elo_env = ELO()
     model1_rating = elo_env.init_rating()
-    model2_rating = elo_env.init_rating()
 
     if ENV_PARAMS.model == "PPO_old":
         train_model = OldPPOAgent(mode="train")
@@ -241,6 +246,9 @@ def train_PPO_parralel():
     
     stage_counter = 0
 
+    league = League(elo_env, competing_model)
+    league.add_player(train_model, elo=elo_env.init_rating())
+
     # Create the pool once, outside the training loop
     with mp.Pool(processes=num_games) as pool:
         for epoch in tqdm(range(AI_PARAMS.episodes), desc="Training PPO"):
@@ -270,10 +278,7 @@ def train_PPO_parralel():
             else:
                 filename = None
 
-            if epoch % AI_PARAMS.opposing_model_freeze_time == 0:
-                competing_model.policy.load_state_dict(train_model.policy.state_dict())
-                competing_model.policy_old.load_state_dict(train_model.policy_old.state_dict())
-                model2_rating = elo_env.create_rating(model1_rating.mu, model1_rating.sigma)
+            competing_model, model2_rating = league.sample_player()
             
             if torch.cuda.is_available():
                 args_list = [(train_model, competing_model, AI_PARAMS.current_stage, filename if i == 0 else None, i % torch.cuda.device_count()) for i in range(num_games)]
@@ -298,10 +303,11 @@ def train_PPO_parralel():
                 stats_history_viewer.add(stats)
                 combined_memories.append(memories)
 
-                if AI_PARAMS.current_stage >= 3:
+                if AI_PARAMS.current_stage >= 3 and model2_rating is not None:
                     new_model1_rating, new_model2_rating = elo_env.calculate(model1_rating, model2_rating, score1, score2)
                     model1_rating = new_model1_rating
                     # model2_rating = new_model2_rating keep the same rating for the competing model
+
             stats_history_viewer.combine_last_N(num_games)
             stats_history_viewer.add_elo(model1_rating)
 
@@ -318,6 +324,8 @@ def train_PPO_parralel():
             stats_history_viewer.add_similarity_loss(similarity_loss)
 
             entropy_percent = entropy / math.log(AI_PARAMS.ACTION_SIZE) if AI_PARAMS.ACTION_SIZE > 1 else 0
+            if model2_rating is None:
+                model2_rating = elo_env.create_rating(1, 1)
             print(
                 f"Episode: {epoch}, Score: {score1:.1f} - {score2:.1f}, "
                 f"Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, "
@@ -338,6 +346,71 @@ def train_PPO_parralel():
 
     pygame.quit()
 
+
+def test_PPO():
+    elo_env = ELO()
+
+    models = []
+    ratings = []
+    names = []
+
+    # Load models
+    #maac = MAAC(mode="test")
+    #maac.load_model("MAAC_v3_sub0")
+    #names.append("MAAC")
+    #ratings.append(elo_env.init_rating())
+    #models.append(maac)
+
+    ppo = PPOAgent(mode="test")
+    ppo.load_model("PPO_v24_sub0")
+    names.append("PPO")
+    ratings.append(elo_env.init_rating())
+    models.append(ppo)
+
+    hugo = HUGO(mode="test")
+    hugo.load_model("HUGO_v8_sub0")
+    names.append("HUGO")
+    ratings.append(elo_env.init_rating())
+    models.append(hugo)
+
+    #rand = RandomModel()
+    #names.append("Random")
+    #ratings.append(elo_env.init_rating())
+    #models.append(rand)
+
+    ENV_PARAMS = EnvironmentHyperparameters()
+    AI_PARAMS = AIHyperparameters()
+
+    pygame.init()
+    AI_PARAMS.current_stage = 4
+
+    for epoch in tqdm(range(AI_PARAMS.episodes)):
+
+        model1_idx = random.randint(0, len(models) - 1)
+        while True:
+            model2_idx = random.randint(0, len(models) - 1)
+            if model2_idx != model1_idx:
+                break
+        
+        model1 = models[model1_idx]
+        model2 = models[model2_idx]
+
+        model1_rating = ratings[model1_idx]
+        model2_rating = ratings[model2_idx]
+
+        score1, score2, avg_reward, ball_dist,ball_hits, entropy, stats = run_game(model1, model2, "testing", AI_PARAMS.current_stage)
+
+        new_model1_rating, new_model2_rating = elo_env.calculate(model1_rating, model2_rating, score1, score2)
+        ratings[model1_idx] = new_model1_rating
+        ratings[model2_idx] = new_model2_rating
+
+        print(f"Episode: {epoch},{names[model1_idx]} vs {names[model2_idx]}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, ELO {model1_rating.mu:.2f} - {model2_rating.mu:.2f}")
+        for i in tqdm(range(1), desc=f"Episode: {epoch}, {names[model1_idx]} vs {names[model2_idx]}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, ELO {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"):
+            a=1
+
+        if epoch % 20 == 0:
+            print(tabulate([[names[i], ratings[i].mu] for i in range(len(models))], headers=["Model", "ELO"]))
+
 import cProfile
 
 if __name__ == "__main__":
@@ -353,5 +426,6 @@ if __name__ == "__main__":
     elif ENV_PARAMS.MODE == "train_parallel":
         mp.set_start_method("spawn", force=True)
         train_PPO_parralel()
-    
-
+    elif ENV_PARAMS.MODE == "test":
+        test_PPO()
+        pass

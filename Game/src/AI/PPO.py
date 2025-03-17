@@ -445,3 +445,10 @@ class PPOAgent:
         self.device = device
         self.policy.to(device)
         self.policy_old.to(device)
+    
+    def load_state_dict(self, state_dict):
+        self.policy.load_state_dict(state_dict)
+        self.policy_old.load_state_dict(state_dict)
+    
+    def state_dict(self):
+        return self.policy.state_dict()

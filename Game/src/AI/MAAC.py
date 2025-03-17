@@ -39,9 +39,9 @@ class AttentionActorCriticNetwork(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(526, 256),
+            nn.Linear(526, 526),
             nn.LeakyReLU(),
-            nn.Linear(256, action_size),
+            nn.Linear(526, action_size),
         )
 
         self.critic_embedding = nn.Sequential(
@@ -61,7 +61,9 @@ class AttentionActorCriticNetwork(nn.Module):
         # 3) Actor head: transforms each post-attention embedding -> action logits
         self.critic_out = nn.Sequential(
             nn.Linear(embedding_dim + embedding_dim, 526),
-            nn.ReLU(),
+            nn.LeakyReLU(),
+            nn.Linear(526, 526),
+            nn.LeakyReLU(),
             nn.Linear(526, 1)
         )
 
@@ -523,3 +525,10 @@ class MAAC:
         self.device = device
         self.policy.to(device)
         self.policy_old.to(device)
+
+    def load_state_dict(self, state_dict):
+        self.policy.load_state_dict(state_dict)
+        self.policy_old.load_state_dict(state_dict)
+    
+    def state_dict(self):
+        return self.policy.state_dict()

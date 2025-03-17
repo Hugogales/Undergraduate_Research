@@ -50,7 +50,7 @@ class AttentionActorCriticNetwork(nn.Module):
 
         # 3) critic head: transforms each post-attention embedding -> value
         self.actor_out = nn.Sequential(
-            nn.Linear(embedding_dim + embedding_dim, 526),
+            nn.Linear(embedding_dim, 526),
             nn.LeakyReLU(),
             nn.Linear(526, 526),
             nn.LeakyReLU(),
@@ -96,7 +96,7 @@ class AttentionActorCriticNetwork(nn.Module):
         actor_input = self.actor_embedding(actor_input) # [B*N, embedding_dim]
         actor_input = actor_input.reshape(B, N, -1) # [B, N, embedding_dim]
         attn_output, _ = self.actor_attention_block(actor_input, actor_input, actor_input) # [B, N, embedding_dim]
-        attn_output = torch.cat([attn_output, actor_input], dim=-1) # [B, N, 2*embedding_dim]
+        #attn_output = torch.cat([attn_output, actor_input], dim=-1) # [B, N, 2*embedding_dim]
         action_probs = torch.softmax(self.actor_out(attn_output), dim=-1) # [B, N, action_size]
 
         return action_probs
@@ -116,7 +116,7 @@ class AttentionActorCriticNetwork(nn.Module):
         actor_input = self.actor_embedding(actor_input) # [B*N, embedding_dim]
         actor_input = actor_input.reshape(B, N, -1) # [B, N, embedding_dim]
         attn_output, _ = self.actor_attention_block(actor_input, actor_input, actor_input) # [B, N, embedding_dim]
-        attn_output = torch.cat([attn_output, actor_input], dim=-1) # [B, N, 2*embedding_dim]
+        #attn_output = torch.cat([attn_output, actor_input], dim=-1) # [B, N, 2*embedding_dim]
         action_probs = torch.softmax(self.actor_out(attn_output), dim=-1) # [B, N, action_size]
 
         # similarity loss 
@@ -126,7 +126,7 @@ class AttentionActorCriticNetwork(nn.Module):
         similarity_matrix = similarity_matrix.masked_fill(mask, 0) # [B, N, N]
         similarity_loss = torch.sum(similarity_matrix, dim=(1, 2)) / (N * (N - 1))  # [1]
         # remove negative values
-        similarity_loss = torch.clamp(similarity_loss, min=-0.5)
+        similarity_loss = torch.clamp(similarity_loss, min=0)
         similarity_loss = similarity_loss.mean()
 
         return action_probs, similarity_loss
@@ -577,3 +577,10 @@ class HUGO: # Hierarchical Unified Generalized Optimization
         self.device = device
         self.policy.to(device)
         self.policy_old.to(device)
+
+    def load_state_dict(self, state_dict):
+        self.policy.load_state_dict(state_dict)
+        self.policy_old.load_state_dict(state_dict)
+    
+    def state_dict(self):
+        return self.policy.state_dict()

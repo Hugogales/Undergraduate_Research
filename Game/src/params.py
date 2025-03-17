@@ -1,5 +1,7 @@
 import random 
-
+#sout("params.py")
+# sed 's/\x0//g' Game/src/params.py
+# run line above is rosie starts to cry
 class AIHyperparameters:
     _instance = None
 
@@ -13,43 +15,43 @@ class AIHyperparameters:
 
         self.NOTE = ""
 
-        self.episodes = 80000
+        self.episodes = 50000
 
-        self.PLAYER_TO_BALL_REWARD_COEFF = 0.000
-        self.BALL_TO_GOAL_REWARD_COEFF =  0.1
-        self.GOAL_REWARD = 500 
+        self.PLAYER_TO_BALL_REWARD_COEFF = 0.0004 # 0.0004
+        self.BALL_TO_GOAL_REWARD_COEFF =  0.2 # 0.1
+        self.GOAL_REWARD = 400 
         self.positive_reward_coef = 1
     
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
 
-        self.learning_rate = 1.0e-5  * 1.5
-        self.min_learning_rate = 0.8e-5  * 1.5
+        self.learning_rate = 1.2e-5  
+        self.min_learning_rate = 1.0e-6 
 
-        self.gamma = 0.98 # discount rate
-        self.batch_size = 2048 
-        self.c_entropy = 0.02 # how much entropy is weighted
+        self.gamma = 0.985 # discount rate
+        self.batch_size = 4096  * 4
+        self.c_entropy = 0.0015  # how much entropy is weighted
         self.temperature = 1
         self.max_grad_norm = 1000
-        self.lam = 0.98 # GAE lambda
+        self.lam = 0.985 # GAE lambda
         self.c_value = 1 #5 how much critic loss is weighted
         self.TD_difference_N = 1
-        self.similarity_loss_coef = 0.005
+        self.similarity_loss_coef = 0.000
 
-        self.epsilon_clip = 0.15
-        self.K_epochs = 12
-        self.opposing_model_freeze_time = 10000
+        self.epsilon_clip = 0.10
+        self.K_epochs = 25
+        self.opposing_model_freeze_time = 2000
 
         self.current_stage = 1
-        self.stage1_steps = 0 # one team plays (typical positions) # bad
-        self.stage2_steps = 40000 # one team plays radomn locations 
+        self.stage1_steps = 0000
+        self.stage2_steps = 50000 # both teams play random location
         self.stage3_steps = 50000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
-        self.stage1_time = 60 
-        self.stage2_time = 60
-        self.stage3_time = 75
-        self.stage4_time = 90
+        self.stage1_time = 50
+        self.stage2_time = 55
+        self.stage3_time = 65
+        self.stage4_time = 75
 
 
     def __new__(cls, *args, **kwargs):
@@ -67,11 +69,11 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay or train_parallel
-        self.MODE = "train" # train or test
+        self.MODE = "train_parallel" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
-            self.FPS = 36
+            self.FPS = 42
             self.NUMBER_OF_PLAYERS = 6
             self.GAME_DURATION = 15 #5* 60  # 5 minutes
             self.RENDER = True
@@ -90,26 +92,26 @@ class EnvironmentHyperparameters:
 
         else: # train or test
             model = "HUGO"
-            version = 8
-            sub_version = 0
+            version = 10
+            sub_version = 10 
             self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
-            self.Load_model = "HUGO_v8_sub0_good"
+            self.Load_model = "HUGO_v10_sub3"
             self.log_name = f"{model}_v{version}_sub{sub_version}_game"
             self.model = model
             self.log_interval = 2500
             self.NUMBER_OF_GAMES = 4
-            self.FPS = 36
-            self.NUMBER_OF_PLAYERS = 4
-            self.GAME_DURATION = 30 
-            self.RENDER = True
-            self.CAP_FPS = True
+            self.FPS = 42
+            self.NUMBER_OF_PLAYERS = 3
+            self.GAME_DURATION = 120 
+            self.RENDER = False
+            self.CAP_FPS = False
 
         self.RANDOMIZE_PLAYERS = False
         self.SIMPLE_GAME = False
 
         self.STATS_UPDATE_INTERVAL = 1000
 
-        self.AGENT_DECISION_RATE =  12 # Number of frames between agent decisions
+        self.AGENT_DECISION_RATE =  14 # Number of frames between agent decisions
 
         # Screen dimensions
         self.WIDTH = 1300  # Increased width for a wider field
@@ -117,17 +119,17 @@ class EnvironmentHyperparameters:
 
         # Player properties
         self.PLAYER_RADIUS = 16
-        self.PLAYER_SPEED = 6
+        self.PLAYER_SPEED = 5
         self.PLAYER_HEIGHT = self.PLAYER_RADIUS * 2  # Diameter
         self.PLAYER_POWER = 2 # player vs player collision power 
 
         # Ball properties
         self.BALL_RADIUS = 10
-        self.BALL_FRICTION = 0.97
-        self.BALL_MAX_SPEED = 13
+        self.BALL_FRICTION = 0.965
+        self.BALL_MAX_SPEED = 15
         self.BALL_HEIGHT = self.BALL_RADIUS * 2  # Diameter
-        self.BALL_POWER =  0.75 # player vs ball collision power
-        self.KICK_SPEED = 15
+        self.BALL_POWER =  0.95 # player vs ball collision power
+        self.KICK_SPEED = 15.5
 
 
         # Goal properties
@@ -270,6 +272,7 @@ def print_hyper_params():
     AI_PARAMS = AIHyperparameters()
     print("Environment Hyperparameters:")
     for attr in dir(ENV_PARAMS):
+
         if not attr.startswith("__"):
             print(f"{attr}: {getattr(ENV_PARAMS, attr)}")
     print("\nAI Hyperparameters:")
