@@ -380,10 +380,16 @@ class Game:
         box_width = score_text.get_width() + 20  # Add some padding
         box_height = score_text.get_height() + 10  # Add some padding
         
-        # Draw the box
-        pygame.draw.rect(self.screen, VIS_PARAMS.WHITE, (box_x, box_y, box_width, box_height))
-        pygame.draw.rect(self.screen, VIS_PARAMS.BLACK, (box_x, box_y, box_width, box_height), 2)  # Border
-        
+        # Draw the box with transparency
+        # Create a surface with per-pixel alpha
+        box_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+        # Fill with semi-transparent white (R, G, B, Alpha)
+        box_surface.fill((255, 255, 255, 180))  # 180 is ~70% opacity
+        # Draw border on the translucent surface
+        pygame.draw.rect(box_surface, VIS_PARAMS.BLACK, (0, 0, box_width, box_height), 2)
+        # Blit the translucent box onto the main screen
+        self.screen.blit(box_surface, (box_x, box_y))
+
         # Blit the text inside the box
         self.screen.blit(score_text, (box_x + 10, box_y + 5))
 

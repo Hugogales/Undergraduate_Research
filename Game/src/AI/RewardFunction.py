@@ -59,9 +59,6 @@ class RewardFunction:
         reward = dot_product * self.ai_params.PLAYER_TO_BALL_REWARD_COEFF
 
 
-        if reward > 0:
-            reward = reward * self.ai_params.positive_reward_coef
-
         return reward
 
     def calculate_ball_to_goal_velocity_reward(self, player):
@@ -99,10 +96,28 @@ class RewardFunction:
         # Set the reward proportional to the dot product
         reward = dot_product * self.ai_params.BALL_TO_GOAL_REWARD_COEFF
 
-        if reward > 0:
-            reward = reward * self.ai_params.positive_reward_coef
 
         return reward
+
+
+    def calculate_distance_to_players_reward(self, player):
+        """
+        Calculates the reward based on the distance to the other players.
+
+        :param player: The Player object for whom the reward is calculated.
+        :return: The calculated reward.
+        """
+        distance_reward = 0
+
+        for other_player in self.game.players: # within the same team
+            if other_player != player and other_player.team_id == player.team_id:
+                distance = math.hypot(player.position[0] - other_player.position[0], player.position[1] - other_player.position[1])
+                distance_reward += distance
+
+        distance_reward /= len(self.game.players) - 1
+
+        return self.ai_params.DISTANCE_REWARD_COEFF * min(distance_reward, self.ai_params.DISTANCE_REWARD_CAP)
+
 
     def calculate_rewards(self, goal1, goal2):
         """
@@ -120,13 +135,16 @@ class RewardFunction:
             # Reward for ball moving towards the opponent's goal
             total_reward += self.calculate_ball_to_goal_velocity_reward(player)
 
+            # Reward for player being faraway to teammates
+            total_reward += self.calculate_distance_to_players_reward(player)
+
             # Goal rewards
             if goal1 and player.team_id == 1:
                 # Reward team 1 for scoring
-                total_reward += self.ai_params.GOAL_REWARD * self.ai_params.positive_reward_coef
+                total_reward += self.ai_params.GOAL_REWARD 
             if goal2 and player.team_id == 2:
                 # Reward team 2 for scoring
-                total_reward += self.ai_params.GOAL_REWARD * self.ai_params.positive_reward_coef
+                total_reward += self.ai_params.GOAL_REWARD
             if goal1 and player.team_id == 2:
                 # Penalize team 2 for opponent scoring
                 total_reward -= self.ai_params.GOAL_REWARD

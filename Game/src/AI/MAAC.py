@@ -98,7 +98,8 @@ class AttentionActorCriticNetwork(nn.Module):
         critic_input = critic_input.reshape(B*N, -1) # [B*N, state_size + action_size]
         critic_input = self.critic_embedding(critic_input) # [B*N, embedding_dim]
         critic_input = critic_input.reshape(B, N, -1) # [B, N, embedding_dim]
-        attn_output, _ = self.critic_attention_block(critic_input, critic_input, critic_input) # [B, N, embedding_dim]
+        fixed_value = torch.ones_like(critic_input).to(critic_input.device)  # Create a matrix of 1s with same shape
+        attn_output, _ = self.critic_attention_block(critic_input, critic_input, fixed_value)  # [B, N, embedding_dim]
         attn_output = torch.cat([critic_input, attn_output], dim=-1) # [B, N, 2*embedding_dim]
         values = self.critic_out(attn_output).squeeze(-1) # [B, N]
         values = values.reshape(B, N) # [B, N]
@@ -155,7 +156,8 @@ class AttentionActorCriticNetwork(nn.Module):
                 agent_emb_list = agent_emb_list.reshape(B*self.action_size, N, -1)  # => [B*A, N, emb_dim]
 
                 # Pass through attention
-                attn_output, _ = self.critic_attention_block(agent_emb_list, agent_emb_list, agent_emb_list) # [B*A, N, emb_dim]
+                fixed_value = torch.ones_like(agent_emb_list).to(agent_emb_list.device)  # Create a matrix of 1s with same shape
+                attn_output, _ = self.critic_attention_block(agent_emb_list, agent_emb_list, fixed_value) # [B*A, N, emb_dim]
                 attn_output = torch.cat([attn_output, agent_emb_list], dim=-1)  # [B*A, N, 2*emb_dim]
 
                 # Extract the i-th agent’s embedding 
@@ -221,7 +223,7 @@ class MAAC:
 
     def select_action(self, state):
         try :
-            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+            state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device) # [1, num_agents, state_size]
             with torch.no_grad():
                 action_probs = self.policy_old.actor_forward(state_tensor) # [1, num_agents, action_size]
 
@@ -312,7 +314,7 @@ class MAAC:
 
             # Clear memory after processing
             for j in range(self.number_of_agents):
-                self.memories[i+j]
+                self.memories[i+j].clear()
 
         # Concatenate experiences from all agents
         states = torch.cat(states, dim=0) # [B*G , N, state_size]

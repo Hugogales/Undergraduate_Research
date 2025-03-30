@@ -1,0 +1,269 @@
+\documentclass[conference]{IEEEtran}
+%\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+\usepackage{amsmath,amssymb,amsfonts,mathtools,amsthm}
+%\usepackage{appendix}
+%\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{bm}  
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+\newcommand{\spr}{s^{\prime}}
+\newcommand{\apr}{a^{\prime}}
+\newcommand{\sS}[1]{s^{(#1)}}
+\newcommand{\st}[1]{s_{#1}}
+\newcommand{\aA}[1]{a^{(#1)}}
+\newcommand{\at}[1]{a_{#1}}
+\newcommand{\rf}[3]{r(#1,#2,#3)}
+\newcommand{\rt}[1]{r_{#1}}
+\newcommand{\argmax}{\operatornamewithlimits{argmax}}
+\newcommand{\argmin}{\operatornamewithlimits{argmin}}
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+
+%@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+\begin{document}
+
+\title{Attention-based Policies for Collaborative Multi-Agent A2C}
+
+\author{
+\IEEEauthorblockN{1\textsuperscript{st} Hugo Garrido-Lestache}
+\IEEEauthorblockA{\textit{Department of Computer Science and Software Engineering} \\
+\textit{Milwaukee School of Engineering}\\
+Milwaukee, WI USA \\
+garrido-lestacheh@msoe.edu}
+\and
+\IEEEauthorblockN{2\textsuperscript{nd} Jeremy Kedziora}
+\IEEEauthorblockA{\textit{Department of Computer Science and Software Engineering} \\
+\textit{Milwaukee School of Engineering}\\
+Milwaukee, WI USA \\
+kedziora@msoe.edu}
+}
+
+\maketitle
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{abstract}\\
+
+Collaboration is essential in solving complex real-world problems, as it enables tasks to be completed more efficiently and leverages the diverse perspectives and skillsets of team members.
+Multi-Agent Reinforcement Learning (MARL) can be utilized to train agents in environments where they must collaborate to achieve a common goal. 
+MARL is challenging due to non-stationarity introduced into the environment by multiple agents learning simultaneously and its development has mainly focused on managing these challenges without any special focus on collaboration. 
+Recent work on MARL has introduced the use of an attention mechanism in the critic of the Actor-Critic architecture that allows the critic to select relevant information from the other agents' observations, promoting better learning of the value function.
+In this paper, we study the impact of the attention mechanism on the quality of learned collaborative policies. 
+We propose a new actor-critic architecture that incorporates an attention mechanism in the actor to model collaboration directly in the learned policies.  
+We evaluate this architecture on a simulation of a soccer game that features competition between teams of collaborators and compare it to current state-of-the-art in MARL as well as classical reinforcement learning algorithms.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Reinforcement Learning, Multi-Agent Systems, Actor-Critic, Attention Mechanism
+\end{IEEEkeywords}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+\noindent Collaboration and communication are likely one of the most important aspects that make the human species the most advanced on earth. Because of this, exploring this skill in AI could drastically increase the magnitude and complexity of problems we can tackle through the ability to scale the number of agents we can assign to a problem while ensuring cohesion within the agents. In this paper, we present a new model algorithm with a unique focus of collaboration between agents in multi-agent reinforcement learning.
+
+Attention was first brought to the spotlight by \cite{attentionneed}. Since then, attention has been an amazing technique which has been used in a wide range of machine learning domains. Specifically in multi-agent reinforcement learning, attention was used by \cite{MAAC} to improve the advantage calculation. In this paper, we look at using
+
+
+The attention mechanism on the model aim to allow agents to communicate and share information and thoughts in a selective manner. Intuitively, this works by allowing an agent to ask an open question to other agents, all agents then choose to which agents are fit to respond and the ones who are fit respond and transfer this information. In the example of a soccer game, a player with the ball may ask "who should I pass the ball to", agents which do not have a defender may be selected as being fit to respond and then the information of "pass to this agent" is transmitted.
+
+
+%%problem
+
+%%contribution (experiments)
+
+%%MENTION CTE and CTDE.
+
+%%Outline of paper
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Related Work} %% should be placed into introduction for better readability for now
+
+Many existing architectures exist for managing collaborative multi-agent systems.For example, In \cite{DOC} they used the option-critic architecture first described in \cite{optioncritic} and extended to cooperation between agents.
+In \cite{CORD} they use a hierarchical approach where a top-level policy assigns roles to lower-level policies in the form of a latent vector. When it comes to using attention for the purpose of collaboration, \cite{jiang2018learningattentionalcommunicationmultiagent} uses attention to determine whether agents should communicate with each other and then actually communicate through the use of Long-Short-Term-Memory architecture.
+The most similar paper to our work is \cite{MAAC} where they explored the use of attention mechanism in the critic. They additionally explored methods for extracting a new baseline (named multi-agent baseline) which consisted across averaging across the actions of all cooperative agents to generate a better estimate of the return.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Our approach}
+We begin by introducing the fundamental principles and notation underlying reinforcement learning. Following this, we provide a comprehensive description of our contributions.
+
+\subsection{Background and preliminaries}
+\noindent In reinforcement learning, control problems with multiple agents can be modeled as Markov Decision Games (MDG), which are defined by a set of states $S$ that describe the current common environmental conditions facing a set of $n$ agents, a set of actions $A$ that all agents can take, where the probabilities $p(s\mid \vec{a} ,s')$ for transitioning from state $s$ to state $s'$ given all of the agent's actions $a_1, a_2 ...,a_n$ denoted as $\vec{a}$, and a function $\vec{r}:S\times \vec{A}\times S \to \mathbb{R}^n$ so that $\vec{r}(s^{\prime},\vec{a},s)$ supplies the immediate rewards for each agent associated with this transition.
+In environments that take place over a finite number of discrete periods $T$, the sequence of periods in which the agents participate is referred to as an episode.
+At each time step, each agent makes an observation $o_{t, i}$ of the global state such that $o_{t,i} = O_i(s_t)$, encapsulating all available information for agent  $i$.
+The goal of agents is to learn a shared policy $\pi(a_i|o_i)$, which describes the probability that a trained agent should take action $a_i$  given an observation $o_i$, to maximize its individual sequence of rewards throughout an episode: $\sum_{t = 0}^T\gamma^tr_i(s_{t+1},\vec{a}_t,s_t)$.  
+Here $\vec{a}_t$ and $s_t$ are the agents' actions and the common state at time $t$ and $\gamma\in[0,1]$ is the discount factor on future rewards. 
+
+%%%%%%%%%%
+
+\subsection{Policy Gradients}
+\noindent Policy gradient methods differ from value-based methods through the direct modeling of the policy rather than estimating the value of actions given a state. To learn the policy parameters $\theta$ for a shared policy $\pi_{\theta}(a_i|o_i)$ for all agents, we use the policy gradient theorem to update the parameters in the direction of increase in the sum of discounted rewards. The policy gradient theorem is given by: 
+\begin{equation}
+\nabla_{\theta} J(\theta) = \mathbb{E}_{\tau \sim \pi_{\theta}} \Biggl[ \sum_{i=1}^{n} \sum_{t=0}^{T-1} \nabla_{\theta} \log \pi_{\theta} \bigl(a_{i,t} \mid o_{i,t} \bigr) \, G_{t,i} \Biggr]
+\end{equation}
+
+Where $G_{t,i}$ is the sum of discounted rewards (the return) from a given timestep $t$ onwards for a given agent $i$ and is defined as:
+
+\begin{equation}
+G_{t,i} = \sum_{k=t}^{T-1} \gamma^{\,k - t} \, r_i\bigl(s_{k+1}, \, a_k, \, s_k\bigr).
+\end{equation}
+
+Following the policy gradient theorem, we can take steps in the direction of $J(\theta)$, through the use of gradient ascent on sampled episodes, to reach an optimal shared policy.
+
+%%%%%%%%%%%%
+
+\subsection{Actor-Critic Architectures}
+\noindent Due to high variance in estimates of the return $G_{t,i}$, a baseline is often subtracted from the return. A common choice for the baseline is the state-action-value function $Q_{\theta}(o_{t,i}, a)$ which predicts the return for a specific agent given a chosen action, under the current shared policy $\pi_{\theta} $. Replacing $G_{t,i}$ with $G_{t,i} - Q_{\theta}(o_{i,t}, a)$ in the policy gradient theorem we decrease the variance in the gradient 
+$\nabla_{\theta} J({\theta})$.
+Actor-Critic architectures model the actor as the policy $\pi_{\theta_i}(a|o)$ and the critic as a parametric value function $V_{\theta,i}(o_t)$. The actor policy's parameters are learnt through the policy gradient theorem and the critic's parameters are learnt through value-based methods. The critic's parameters can also be updated via gradient descent on the difference between the critic's predicted state value and a target value, which can be either the observed $G_{t,i}$ or a bootstrapped value.
+
+%%%%%%%%%%
+
+\subsection{Attention Mechanism}
+The attention mechanism enables an agent to query other agents for the internal representations (or thoughts). 
+Thereby enhancing the information within the policy allowing for more collaborative actions.
+In the critic, this aggregates information from multiple agent to more accurately evaluate an agents state-action value, as seen in \cite{MAAC}.
+To incorporate attention into the shared policy, we must condition the agents decision both on both it's own observation and the other agents' observations, this is denoted as $\pi_\theta (a_i|(o_i, o_{\backslash i}))$ where $o_{\backslash i}$ represent all observations other than $i$.
+Similarly, in the critic this is represented as $Q_{\theta}((o_{i}, o_{\backslash i}), (a_{i}, a_{\backslash i}))$.
+
+%%%%%%%%%%%%
+
+\subsection{Actor Attention Architecture}
+The actor architecture is described in detail below, describing the use of attention and how the agents' observations are transformed to a distribution over actions
+First, an embedding vector is generated for each agent using the agent's individual observation via a multi-layer perception $MLP$ as seen below:
+
+\begin{equation}
+    e_i = MLP(o_i)
+\end{equation}
+
+The embeddings of all the agents' are then concatenated to generate the matrix $E$.
+This matrix is separately multiplied with a learned Query ($W_Q$), Key ($W_K$) and Value ($W_V$) weight matrix to produce query $Q$, key $K$ and value $V$ matrices:
+
+\begin{equation}
+{Q = EW_Q} , {K = EW_K}, {V = EW_V} 
+\end{equation}
+
+As seen in \cite{attentionneed}, Attention is computed as:
+
+\begin{equation}
+\text{Attention}(Q, K, V) = \text{Softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V
+\end{equation}
+
+Where $d_k$ is the dimensionality of the K matrix and is done to scale the values appropriately before the softmax function.
+In our implementation, we apply multiple attention heads in parallel through unique sets of Query, Key, and Value weight matrices \cite{attentionneed}.
+The outputs of each attention head are concatenated and passed through a linear transformation to yield the final updated embeddings $\tilde{e}_i$.
+
+Finally we pass these updated embeddings $\tilde{e}_i$ through an MLP, then softmax layer to generate a distribution over actions:
+
+\begin{equation}
+\pi_\theta (a_i|(o_i, o_{\backslash i})) = \text{Softmax}\Bigl(\text{MLP}(\tilde{e}_i)\Bigr)
+\end{equation}
+
+%%%%%%%%%
+\subsection{Critic Attention Architecture}
+Taking inspiration from \cite{MAAC}, we additionally incorporated attention into the critic. This is done by keeping the core attention mechanism the same, but changing how we generate the initial agent embedding and changing the final functions to generate a scalar which represents the state-action value. 
+To create the initial agent embedding for the critic, we use the following equation which takes into account both the agent's observation and action:
+
+\begin{equation}
+    e_i = MLP(o_i,a_i)
+\end{equation}
+
+After passing $e_i$ through the critic's set of attention heads, concatenating their output and passing it through a linear transformation we get a new embedding $\tilde{e}_i$. 
+This is passed through a final MLP to generate the scalar which represents the critic's state-action value estimate.
+
+\begin{equation}
+Q_{\theta}((o_{i}, o_{\backslash i}), (a_{i}, a_{\backslash i})) = \text{MLP}(\tilde{e}_i)\
+\end{equation}
+
+\subsection{Multi-Agent Baseline}
+The multi-agent baseline is given below:
+
+\begin{equation}
+b(o, a_{-i}) = \mathbb{E}_{a_i \sim \pi_\theta}\left[ Q_{i} \left( o, \, (a_i, a_{i\backslash}) \right) \right]
+\end{equation}
+
+The multi-agent baseline computes the expected value of the critic by taking a weighted sum of its outputs over all possible actions for a specific agent, where the weights are given by the agent’s policy distribution.
+This reduces the variance in our baseline as well as generating a more accurate estimate of the true state-value under the current policy due to considering all possible actions and weighting them using the policy's distribution.
+Furthermore, by holding the other agents' actions fixed, we obtain a more accurate estimate of the agent's true value. This is used instead of the critic's state-action value as baseline when computing the gradient.
+
+%%%%%%%%%%%%%%%%%%%%
+
+\section{Conformity Loss}
+Conformity loss works on the assumption that good collaborations require agents working on separate and diverse tasks, which may not be true in some environments. 
+In environments where collaboration is best described as agents working on diverse, complementary task, conformity loss aims to encourage agents to work on different tasks.
+Conformity loss is defined as:
+
+
+
+
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Experimentation}
+\noindent blare blare blare
+
+%\subsection{Figures and Tables}
+%\paragraph{Positioning Figures and Tables} Place figures and tables at the top and 
+%bottom of columns. Avoid placing them in the middle of columns. Large 
+%figures and tables may span across both columns. Figure captions should be 
+%below the figures; table heads should appear above the tables. Insert 
+%figures and tables after they are cited in the text. Use the abbreviation 
+%``Fig.~\ref{fig}'', even at the beginning of a sentence.
+
+%\begin{table}[htbp]
+%\caption{Table Type Styles}
+%\begin{center}
+%\begin{tabular}{|c|c|c|c|}
+%\hline
+%\textbf{Table}&\multicolumn{3}{|c|}{\textbf{Table Column Head}} \\
+%\cline{2-4} 
+%\textbf{Head} & \textbf{\textit{Table column subhead}}& \textbf{\textit{Subhead}}& \textbf{\textit{Subhead}} \\
+%\hline
+%copy& More table copy$^{\mathrm{a}}$& &  \\
+%\hline
+%\multicolumn{4}{l}{$^{\mathrm{a}}$Sample of a Table footnote.}
+%\end{tabular}
+%\label{tab1}
+%\end{center}
+%\end{table}
+
+%\begin{figure}[htbp]
+%\centerline{\includegraphics{fig1.png}}
+%\caption{Example of a figure caption.}
+%\label{fig}
+%\end{figure}
+
+%Figure Labels: Use 8 point Times New Roman for Figure labels. Use words 
+%rather than symbols or abbreviations when writing Figure axis labels to 
+%avoid confusing the reader. As an example, write the quantity 
+%``Magnetization'', or ``Magnetization, M'', not just ``M''. If including 
+%units in the label, present them within parentheses. Do not label axes only 
+%with units. In the example, write ``Magnetization (A/m)'' or ``Magnetization 
+%\{A[m(1)]\}'', not just ``A/m''. Do not label axes with a ratio of 
+%quantities and units. For example, write ``Temperature (K)'', not 
+%``Temperature/K''.
+
+\section*{Acknowledgment}
+This project was done through the use of the "ROSIE" supercomputer at the Milwaukee School of Engineering.
+This supercomputer has been essential in the development and experimentation of this paper, allowing for fast simultaneous experiments. Over 2000 jobs were run on the ROSIE supercomputer, with a mean of 4 hours for each job totaling over a year of runtime. Furthermore, training with HUGO model on ROSIE was 8x faster than on a conventional modern laptop due to ROSIE fast TPUs. Rosie helped make this project possible.
+
+
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

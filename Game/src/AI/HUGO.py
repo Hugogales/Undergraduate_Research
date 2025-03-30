@@ -31,6 +31,7 @@ class AttentionActorCriticNetwork(nn.Module):
 
         AI_PARAMS = AIHyperparameters()
         self.temperature = AI_PARAMS.temperature
+        self.similarity_loss_cap = AI_PARAMS.similarity_loss_cap
         self.action_size = action_size
         self.emb_dim = embedding_dim
 
@@ -126,7 +127,7 @@ class AttentionActorCriticNetwork(nn.Module):
         similarity_matrix = similarity_matrix.masked_fill(mask, 0) # [B, N, N]
         similarity_loss = torch.sum(similarity_matrix, dim=(1, 2)) / (N * (N - 1))  # [1]
         # remove negative values
-        similarity_loss = torch.clamp(similarity_loss, min=0)
+        similarity_loss = torch.clamp(similarity_loss, min=self.similarity_loss_cap)
         similarity_loss = similarity_loss.mean()
 
         return action_probs, similarity_loss
@@ -364,7 +365,7 @@ class HUGO: # Hierarchical Unified Generalized Optimization
 
             # Clear memory after processing
             for j in range(self.number_of_agents):
-                self.memories[i+j]
+                self.memories[i+j].clear()
 
         # Concatenate experiences from all agents
         states = torch.cat(states, dim=0) # [B*G , N, state_size]

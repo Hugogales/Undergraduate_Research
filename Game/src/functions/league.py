@@ -1,18 +1,23 @@
 from AI.randmodel import RandomModel
 from functions.ELO import ELO
 from random import randint
+from params import AIHyperparameters
 
 class League:
 
     def __init__(self, elo_env, opponent):
+        AI_PARAMS = AIHyperparameters()
+
         self.players = []
         self.elos = []
         self.num_players = 0
-        self.max_players = 15
+        self.max_players = AI_PARAMS.max_oppenents
         self.elo_env = elo_env
         self.age = 0 
-        self.max_age = 2000     
+        self.max_age = AI_PARAMS.opposing_model_freeze_time   
         self.opponent = opponent
+
+        
 
     def add_player(self, player, elo):
         self.players.append(player.state_dict())
