@@ -75,15 +75,26 @@ class EnvironmentHyperparameters:
         self._initialized = True
 
         # Options: train, test, play, replay or train_parallel, test_parallel
-        self.MODE = "replay" # train or test
+        self.MODE = "play_ai" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 42
-            self.NUMBER_OF_PLAYERS = 6
-            self.GAME_DURATION = 15 #5* 60  # 5 minutes
+            self.NUMBER_OF_PLAYERS = 1
+            self.GAME_DURATION = 5* 60  # 5 minutes
             self.RENDER = True
             self.CAP_FPS = True
+        
+        elif self.MODE == "play_ai":
+            self.NUMBER_OF_GAMES = 1
+            self.FPS = 42 
+            self.NUMBER_OF_PLAYERS = 3
+            self.NUMBER_OF_HUMAN_PLAYERS = 1
+            self.GAME_DURATION =2* 60  # 5 minutes
+            self.RENDER = True
+            self.CAP_FPS = True
+            self.Load_model = "HUGO_v15_sub6"
+            self.model = "HUGO"
 
         elif self.MODE == "replay":
             self.FILE_NAME = "taac_vs_maac"

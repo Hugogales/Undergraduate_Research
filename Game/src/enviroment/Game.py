@@ -29,41 +29,8 @@ class Game:
 
         self.team_1 = []
         self.team_2 = []
-        for i in range(ENV_PARAMS.NUMBER_OF_PLAYERS):
-            if ENV_PARAMS.MODE == "play":
-                #Wasd
-                self.team_1.append(
-                    Player(
-                    team_id=1,
-                    player_id=i,
-                    up_key=pygame.K_w,
-                    down_key=pygame.K_s,
-                    left_key=pygame.K_a,
-                    right_key=pygame.K_d,
-                    shoot_key=pygame.K_SPACE
-                ))
-                #Arrow keys
-                self.team_2.append(
-                    Player(
-                    team_id=2,
-                    player_id=i,
-                    up_key=pygame.K_DOWN,
-                    down_key=pygame.K_UP,
-                    left_key=pygame.K_LEFT,
-                    right_key=pygame.K_RIGHT,
-                    shoot_key=pygame.K_RCTRL
-                ))
-            else:
-                self.team_1.append(
-                    Player(
-                    team_id=1,
-                    player_id=i
-                ))
-                self.team_2.append(
-                    Player(
-                    team_id=2,
-                    player_id=i
-                ))
+
+        self._adding_players()
 
         self.players = self.team_1 + self.team_2
 
@@ -126,6 +93,105 @@ class Game:
         self.reward_function = RewardFunction(self)
         self.stats = GameStats(self)
 
+    def _adding_players(self):
+        if ENV_PARAMS.MODE == "play":
+            for i in range(ENV_PARAMS.NUMBER_OF_PLAYERS):
+                #Wasd
+                self.team_1.append(
+                    Player(
+                    team_id=1,
+                    player_id=i,
+                    up_key=pygame.K_w,
+                    down_key=pygame.K_s,
+                    left_key=pygame.K_a,
+                    right_key=pygame.K_d,
+                    shoot_key=pygame.K_SPACE
+                ))
+                #Arrow keys
+                self.team_2.append(
+                    Player(
+                    team_id=2,
+                    player_id=i,
+                    up_key=pygame.K_DOWN,
+                    down_key=pygame.K_UP,
+                    left_key=pygame.K_LEFT,
+                    right_key=pygame.K_RIGHT,
+                    shoot_key=pygame.K_RCTRL
+                ))
+        elif ENV_PARAMS.MODE == "play_ai":
+            if ENV_PARAMS.NUMBER_OF_HUMAN_PLAYERS == 1:
+                #Wasd
+                self.team_1.append(
+                    Player(
+                    team_id=1,
+                    player_id=0,
+                    up_key=pygame.K_w,
+                    down_key=pygame.K_s,
+                    left_key=pygame.K_a,
+                    right_key=pygame.K_d,
+                    shoot_key=pygame.K_SPACE
+                ))
+                #AI
+                for i in range(1, ENV_PARAMS.NUMBER_OF_PLAYERS):
+                    self.team_1.append(
+                        Player(
+                        team_id=1,
+                        player_id=i
+                    ))
+                for i in range(ENV_PARAMS.NUMBER_OF_PLAYERS):
+                    #Arrow keys
+                    self.team_2.append(
+                        Player(
+                        team_id=2,
+                        player_id=i,
+                    ))
+            elif ENV_PARAMS.NUMBER_OF_HUMAN_PLAYERS == 2:
+                self.team_1.append(
+                    Player(
+                        team_id=1,
+                        player_id=0,
+                        up_key=pygame.K_w,
+                        down_key=pygame.K_s,
+                        left_key=pygame.K_a,
+                        right_key=pygame.K_d,
+                        shoot_key=pygame.K_SPACE
+                    ))
+                self.team_1.append(
+                    Player(
+                        team_id=1,
+                        player_id=1,
+                        up_key=pygame.K_UP,
+                        down_key=pygame.K_DOWN,
+                        left_key=pygame.K_LEFT,
+                        right_key=pygame.K_RIGHT,
+                        shoot_key=pygame.K_RCTRL
+                    ))
+                
+                for i in range(2, ENV_PARAMS.NUMBER_OF_PLAYERS):
+                    self.team_1.append(
+                        Player(
+                        team_id=1,
+                        player_id=i
+                    ))
+                for i in range(ENV_PARAMS.NUMBER_OF_PLAYERS):
+                    #Arrow keys
+                    self.team_2.append(
+                        Player(
+                        team_id=2,
+                        player_id=i,
+                    ))
+        else:
+            for i in range(ENV_PARAMS.NUMBER_OF_PLAYERS):
+                self.team_1.append(
+                    Player(
+                    team_id=1,
+                    player_id=i
+                ))
+                self.team_2.append(
+                    Player(
+                    team_id=2,
+                    player_id=i
+                ))
 
     def handle_collisions(self):
         """
@@ -487,6 +553,148 @@ class Game:
         del self.stats
         return final
  
+    def run_play_ai(self, model1, model2):
+        """
+        Runs a game where human players on team 1 play against AI models.
+        Team 1 can have a mix of human and AI players (based on ENV_PARAMS.HUMAN_PLAYERS).
+        Team 2 is fully controlled by an AI model.
+    
+        :param model1: Model for AI players in team 1
+        :param model2: Model for team 2
+        """
+        running = True
+        self.reset_game()
+    
+        human_players_count = ENV_PARAMS.NUMBER_OF_HUMAN_PLAYERS
+    
+        # Initialize input update parameters
+        game_fps = ENV_PARAMS.FPS if ENV_PARAMS.CAP_FPS else 60  # Default to 60 FPS if uncapped
+        action_update_interval = int(game_fps / ENV_PARAMS.AGENT_DECISION_RATE)
+        frame_counter = 0
+    
+        # Initialize tracking variables
+        accumalated_rewards_team1 = [0] * len(self.team_1)
+        accumalated_rewards_team2 = [0] * len(self.team_2)
+        acumalated_dones = []
+        total_ball_distance = 0
+    
+        # Initialize last keys pressed for human control
+        last_keys = pygame.key.get_pressed()
+    
+        # Prepare models for storage
+        model1.memory_prep(len(self.team_1))
+        model2.memory_prep(len(self.team_2))
+    
+        # Initialize AI actions
+        current_actions_team1 = [[0,0,0,0,0]] * len(self.team_1)  # do nothing for all players
+        current_actions_team2 = [[0,0,0,0,0]] * len(self.team_2)  # do nothing for all players
+    
+        while running:
+            if ENV_PARAMS.RENDER and ENV_PARAMS.CAP_FPS:
+                self.clock.tick(ENV_PARAMS.FPS)  # Maintain the desired frame rate if rendering
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                
+            self.simulation_time += self.delta_time
+            self.timer = ENV_PARAMS.GAME_DURATION - self.simulation_time
+        
+            if self.timer <= 0:
+                running = False
+            
+            # Get current game state
+            states = self.state_parser.parse_state()
+            states_team1 = states[:len(self.team_1)]
+            states_team2 = states[len(self.team_1):]
+        
+            # Get current keyboard state for human players
+            if frame_counter % action_update_interval == 0:
+                keys = pygame.key.get_pressed()
+                last_keys = keys
+            else:
+                keys = last_keys  # Use last keys pressed
+            
+            # Agent decision-making
+            if frame_counter % action_update_interval == 0 or not running:
+                # Get AI actions for all players
+                # For team 1, we'll get actions for all players but only use them for AI players
+                actions, entropys = model1.get_actions(states_team1)
+                current_actions_team1 = actions
+            
+                # For team 2, all players are AI
+                actions, _ = model2.get_actions(states_team2)
+                current_actions_team2 = actions
+
+            # Handle Team 1 player movement - mix of human and AI
+            for i, player in enumerate(self.team_1):
+                if i < human_players_count:
+                    # Human-controlled player
+                    player.handle_movement(keys)
+                else:
+                    # AI-controlled player
+                    player.move(current_actions_team1[i])
+                
+            # Handle Team 2 player movement - all AI
+            for i, player in enumerate(self.team_2):
+                player.move(current_actions_team2[i])
+            
+            # Update ball's movement
+            ball_position = self.ball.position.copy()
+            self.ball.update_position()
+        
+            # Handle collisions
+            self.handle_collisions()
+        
+            # Check for goals
+            goal1, goal2 = self.check_goals()
+        
+            if not goal1 and not goal2:
+                total_ball_distance += math.hypot(ball_position[0] - self.ball.position[0], ball_position[1] - self.ball.position[1])
+            
+            # Calculate rewards
+            rewards = self.reward_function.calculate_rewards(goal1, goal2)
+            accumalated_rewards_team1 = [a + b for a, b in zip(accumalated_rewards_team1, rewards[:len(self.team_1)])]
+            accumalated_rewards_team2 = [a + b for a, b in zip(accumalated_rewards_team2, rewards[len(self.team_1):])]
+        
+            done = not running or goal1 or goal2  # game finishes or scored
+            acumalated_dones.append(done)
+        
+            if frame_counter % action_update_interval == 0 or not running:
+                done = any(acumalated_dones)
+            
+                self.stats.calculate_stats(sum(accumalated_rewards_team1), entropys, total_ball_distance)
+                total_ball_distance = 0
+            
+                # Store rewards for AI players only in team 1
+                if human_players_count < len(self.team_1):
+                    # Extract only the rewards for AI players
+                    ai_rewards = accumalated_rewards_team1[human_players_count:]
+                    model1.store_rewards(ai_rewards, done)
+                
+                # Store rewards for all players in team 2
+                model2.store_rewards(accumalated_rewards_team2, done)
+            
+                # Reset accumulated values
+                accumalated_rewards_team1 = [0] * len(self.team_1)
+                accumalated_rewards_team2 = [0] * len(self.team_2)
+                acumalated_dones = []
+            
+            if self.log_name is not None:
+                self.logger.log_state(self.players, self.ball, self.timer, (self.score_team1, self.score_team2))
+            
+            # Render everything
+            self.render()
+        
+            frame_counter += 1  # Increment frame counter
+        
+        if self.log_name is not None:
+            self.logger.close()
+        
+        final = self.stats.final()
+        del self.stats
+    
+        return final
 
     def replay(self, states):
         """
@@ -676,3 +884,4 @@ class Game:
         del self.stats
 
         return final
+
