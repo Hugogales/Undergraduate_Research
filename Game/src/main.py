@@ -48,54 +48,6 @@ def play_game():
     stats.print()
     pygame.quit()
 
-def play_game_ai():
-    filename = format_log_file("last_game")
-    game = Game(log_name=filename)
-
-    if ENV_PARAMS.model == "PPO_old":
-        model1 = OldPPOAgent(mode="test")
-        model2 = OldPPOAgent(mode="test")
-    elif ENV_PARAMS.model == "Bad_Transformer":
-        model1 = BadTransformerPPOAgent(mode="test")
-        model2 = BadTransformerPPOAgent(mode="test")
-    elif ENV_PARAMS.model == "PPO":
-        model1 = PPOAgent(mode="test")
-        model2 = PPOAgent(mode="test")
-    elif ENV_PARAMS.model == "MAAC":
-        model1 = MAAC(mode="test")
-        model2 = MAAC(mode="test")
-    elif ENV_PARAMS.model == "HUGO":
-        model1 = HUGO(mode="test")
-        model2 = HUGO(mode="test")
-    else:
-        raise ValueError("Model not recognized")
-
-    model2.policy.eval()
-    model2.policy_old.eval()
-    model2.policy.requires_grad = False
-    model2.policy_old.requires_grad = False
- 
-    model1.policy.eval()
-    model1.policy_old.eval()
-    model1.policy.requires_grad = False
-    model1.policy_old.requires_grad = False
-
-    if ENV_PARAMS.Load_model:
-        model1.load_model(ENV_PARAMS.Load_model)
-        model2.load_model(ENV_PARAMS.Load_model)
-    
-    stats = game.run_play_ai(model1, model2)
-    score = stats.score
-
-    if score[0] > score[1]:
-        print("Team 1 wins!")
-    elif score[0] < score[1]:
-        print("Team 2 wins!")
-
-    print(f"Final score: {score}")
-    stats.print()
-    pygame.quit()
-
 def replay_game():   
     ENV_PARAMS = EnvironmentHyperparameters()
     ENV_PARAMS.RENDER = True
@@ -124,6 +76,8 @@ def train_PPO():
 
     ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage1_time
     elo_env = ELO()
+
+
 
     model1_rating = elo_env.init_rating()
 
@@ -309,9 +263,9 @@ def train_PPO_parralel():
     #new_model = PPOAgent(mode="test")
     #new_model.load_model("PPO_v29_sub3")
     #league.add_player(new_model, elo=elo_env.init_rating())
-    new_model = PPOAgent(mode="test")
-    new_model.load_model("PPO_v30_sub2")
-    league.add_player(new_model, elo=elo_env.init_rating())
+    #new_model = PPOAgent(mode="test")
+    #new_model.load_model("PPO_v30_sub2")
+    #league.add_player(new_model, elo=elo_env.init_rating())
 
     #print(f"Number of players: {len(league.players)}")
 
@@ -1077,8 +1031,6 @@ if __name__ == "__main__":
 
     if ENV_PARAMS.MODE == "play":
         play_game()
-    elif ENV_PARAMS.MODE == "play_ai":
-        play_game_ai()
     elif ENV_PARAMS.MODE == "replay":
         replay_game()
     elif ENV_PARAMS.MODE == "train":
@@ -1093,3 +1045,5 @@ if __name__ == "__main__":
     elif ENV_PARAMS.MODE == "test_parallel":
         mp.set_start_method("spawn", force=True)
         test_PPO_parallel()
+    else:
+        raise ValueError("Invalid mode. Choose 'play', 'replay', 'train', 'train_parallel', 'test', or 'test_parallel'.")

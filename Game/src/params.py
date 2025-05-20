@@ -18,8 +18,8 @@ class AIHyperparameters:
 
         self.episodes = 50000
 
-        self.DISTANCE_REWARD_COEFF =  0.002
-        self.DISTANCE_REWARD_CAP =  130
+        self.DISTANCE_REWARD_COEFF = 0 # 0.002
+        self.DISTANCE_REWARD_CAP = 0 # 80
         self.PLAYER_TO_BALL_REWARD_COEFF = 0.0000 # 0.0004
         self.BALL_TO_GOAL_REWARD_COEFF =  0.1 # 0.1
         self.GOAL_REWARD = 400 
@@ -28,30 +28,30 @@ class AIHyperparameters:
         self.STATE_SIZE = 12 + 2 * (2* self._env.NUMBER_OF_PLAYERS - 1)
         self.ACTION_SIZE = 18
 
-        self.learning_rate = 1.0e-5 
-        self.min_learning_rate = 1.0e-6 
+        self.learning_rate = 4e-5
+        self.min_learning_rate = 1e-6 
 
         self.gamma = 0.985 # discount rate
         self.batch_size = 4096  * 4
-        self.c_entropy = 0.0005  # how much entropy is weighted
+        self.c_entropy = 0.0015  # how much entropy is weighted
         self.temperature = 1
         self.max_grad_norm = 2000
         self.lam = 0.985 # GAE lambda
         self.c_value = 1 #5 how much critic loss is weighted
         self.TD_difference_N = 1
 
-        self.similarity_loss_coef = 0.01
+        self.similarity_loss_coef = 0 #0.01
         self.similarity_loss_cap = -0.5
 
-        self.epsilon_clip = 0.1
-        self.K_epochs = 30
+        self.epsilon_clip = 0.15
+        self.K_epochs = 25 
         self.opposing_model_freeze_time = 750
         self.max_oppenents = 15
 
         self.current_stage = 1
         self.stage1_steps = 0
         self.stage2_steps = 00000 # both teams play random location
-        self.stage3_steps = 00000 # both teams play random locatoin
+        self.stage3_steps = 50000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
         self.stage1_time = 50
@@ -74,30 +74,19 @@ class EnvironmentHyperparameters:
             return 
         self._initialized = True
 
-        # Options: train, test, play, replay or train_parallel, test_parallel
-        self.MODE = "play_ai" # train or test
+        # Options: train, test, play, replay or train_parallel
+        self.MODE = "train_parallel" # train or test
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
             self.FPS = 42
-            self.NUMBER_OF_PLAYERS = 1
-            self.GAME_DURATION = 5* 60  # 5 minutes
+            self.NUMBER_OF_PLAYERS = 6
+            self.GAME_DURATION = 15 #5* 60  # 5 minutes
             self.RENDER = True
             self.CAP_FPS = True
-        
-        elif self.MODE == "play_ai":
-            self.NUMBER_OF_GAMES = 1
-            self.FPS = 42 
-            self.NUMBER_OF_PLAYERS = 3
-            self.NUMBER_OF_HUMAN_PLAYERS = 1
-            self.GAME_DURATION =2* 60  # 5 minutes
-            self.RENDER = True
-            self.CAP_FPS = True
-            self.Load_model = "HUGO_v15_sub6"
-            self.model = "HUGO"
 
         elif self.MODE == "replay":
-            self.FILE_NAME = "taac_vs_maac"
+            self.FILE_NAME = "PPO_v17_trans_1_game_15000"
 
             #params set automatically
             self.NUMBER_OF_GAMES = 0
@@ -108,11 +97,11 @@ class EnvironmentHyperparameters:
             self.CAP_FPS = True
 
         else: # train or test
-            model = "PPO"
-            version = 30
-            sub_version = 4
+            model = "HUGO"
+            version = 101
+            sub_version = 6
             self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
-            self.Load_model = "PPO_v30_sub3"
+            self.Load_model = "HUGO_v101_sub3"
             self.log_name = f"{model}_v{version}_sub{sub_version}_game"
 
             self.model = model

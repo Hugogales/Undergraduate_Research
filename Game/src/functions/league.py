@@ -38,10 +38,10 @@ class League:
             self.opponent.load_state_dict(self.players[index])
             return self.opponent, self.elos[index]
 
-    def update(self, player):
-        age += 1
-        if age > self.max_age:
-            self.add_player(player)
+    def update(self, player, elo):
+        self.age += 1
+        if self.age > self.max_age:
+            self.add_player(player, elo)
             self.age = 0
             if self.num_players > self.max_players:
                 self.remove_player()
