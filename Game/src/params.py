@@ -50,7 +50,7 @@ class AIHyperparameters:
 
         self.current_stage = 1
         self.stage1_steps = 0
-        self.stage2_steps = 00000 # both teams play random location
+        self.stage2_steps = 50000 # both teams play random location
         self.stage3_steps = 50000 # both teams play random locatoin
         self.stage4_steps = 1000000 # both teams play 
 
@@ -76,6 +76,9 @@ class EnvironmentHyperparameters:
 
         # Options: train, test, play, replay or train_parallel
         self.MODE = "train_parallel" # train or test
+        
+        # Whether to use OpenAI Gym interface
+        self.USE_GYM = False
 
         if self.MODE == "play":
             self.NUMBER_OF_GAMES = 1
@@ -98,10 +101,10 @@ class EnvironmentHyperparameters:
 
         else: # train or test
             model = "HUGO"
-            version = 101
-            sub_version = 6
+            version = 100
+            sub_version = 1
             self.MODEL_NAME = f"{model}_v{version}_sub{sub_version}"
-            self.Load_model = "HUGO_v101_sub3"
+            self.Load_model = "HUGO_v100_sub0"
             self.log_name = f"{model}_v{version}_sub{sub_version}_game"
 
             self.model = model

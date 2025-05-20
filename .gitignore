@@ -114,3 +114,14 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# jobs
+jobs/*
+
+# logs
+Game/files/logs/*
+
+# results
+results/*
+
+

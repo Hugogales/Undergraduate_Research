@@ -1,4 +1,6 @@
 from enviroment.Game import Game
+from enviroment.GymAdapter import SoccerEnv
+from AI.ModelAdapter import ModelAdapter
 from tqdm import tqdm
 from functions.General import format_time, format_log_file
 from functions.league import League
@@ -67,7 +69,58 @@ def replay_game():
 
     pygame.quit()
 
-def train_PPO():
+def run_gym_episode(model_adapter, env):
+    """
+    Run a single episode using the OpenAI Gym interface.
+    
+    Args:
+        model_adapter: ModelAdapter instance wrapping an AI model
+        env: SoccerEnv instance
+        
+    Returns:
+        tuple: (score_team1, score_team2, avg_reward, ball_distance, ball_hits, entropy, stats)
+    """
+    observation = env.reset()
+    done = False
+    episode_reward = 0
+    
+    while not done:
+        # Get action from model
+        action, entropy = model_adapter.act(observation)
+        
+        # Take step in environment
+        next_observation, reward, done, info = env.step(action)
+        
+        # Store reward
+        model_adapter.store_reward(reward, done)
+        
+        # Update observation
+        observation = next_observation
+        
+        # Accumulate reward
+        episode_reward += reward
+        
+        # Render if needed
+        if env.env_params.RENDER:
+            env.render()
+    
+    # Get final stats
+    stats = env.game.stats.final()
+    
+    return (
+        stats.score[0], 
+        stats.score[1], 
+        stats.avg_reward,
+        stats.ball_distance,
+        stats.ball_hits,
+        entropy if hasattr(entropy, "__iter__") else 0,
+        stats
+    )
+
+def train_PPO_gym():
+    """
+    Train a PPO model using the OpenAI Gym interface.
+    """
     ENV_PARAMS = EnvironmentHyperparameters()
     AI_PARAMS = AIHyperparameters()
     start_time = time.time()
@@ -77,7 +130,119 @@ def train_PPO():
     ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage1_time
     elo_env = ELO()
 
+    model1_rating = elo_env.init_rating()
 
+    # Create model based on specified type
+    if ENV_PARAMS.model == "PPO_old":
+        train_model = OldPPOAgent(mode="train")
+        competing_model = OldPPOAgent(mode="test")
+    elif ENV_PARAMS.model == "Bad_Transformer":
+        train_model = BadTransformerPPOAgent(mode="train")
+        competing_model = BadTransformerPPOAgent(mode="test")
+    elif ENV_PARAMS.model == "PPO":
+        train_model = PPOAgent(mode="train")
+        competing_model = PPOAgent(mode="test")
+    elif ENV_PARAMS.model == "MAAC":
+        train_model = MAAC(mode="train")
+        competing_model = MAAC(mode="test")
+    elif ENV_PARAMS.model == "HUGO":
+        train_model = HUGO(mode="train")
+        competing_model = HUGO(mode="test")
+    else:
+        raise ValueError("Model not recognized")
+        
+    # Create model adapters
+    train_adapter = ModelAdapter(train_model)
+    competing_adapter = ModelAdapter(competing_model)
+    
+    competing_model.policy.eval()
+    competing_model.policy_old.eval()
+    competing_model.policy.requires_grad = False
+    competing_model.policy_old.requires_grad = False
+
+    if ENV_PARAMS.Load_model:
+        train_model.load_model(ENV_PARAMS.Load_model)
+
+    league = League(elo_env, competing_model)
+    league.add_player(train_model, elo=elo_env.init_rating())   
+
+    stage_counter = 0
+    for epoch in tqdm(range(AI_PARAMS.episodes), desc="Training PPO with Gym"):
+        # Stage transitions, same as before
+        if AI_PARAMS.current_stage == 1 and stage_counter >= AI_PARAMS.stage1_steps:
+            AI_PARAMS.current_stage += 1
+            stage_counter = 0
+            ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage2_time
+            print("change to stage 2 - random locations ")
+        if AI_PARAMS.current_stage == 2 and stage_counter >= AI_PARAMS.stage2_steps:
+            AI_PARAMS.current_stage += 1
+            stage_counter = 0
+            ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage3_time
+            print("change to stage 3 - both team plays - random positions")
+        if AI_PARAMS.current_stage == 3 and stage_counter >= AI_PARAMS.stage3_steps:
+            AI_PARAMS.current_stage += 1
+            stage_counter = 0
+            ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage4_time
+            print("change to stage 4 - both teams plays - typical locations")
+        stage_counter += 1
+
+        # Create environment
+        if epoch % ENV_PARAMS.log_interval == 0:
+            filename = f"{ENV_PARAMS.log_name}_{epoch}"
+            print_hyper_params()
+        else:
+            filename = None
+            
+        env = SoccerEnv(log_name=filename)
+
+        # Update competing model
+        competing_model, model2_rating = league.sample_player()
+
+        # Use the environment's run_episode method to maintain full compatibility
+        # This preserves all the existing functionality including team 2's model
+        score1, score2, avg_reward, ball_dist, ball_hits, entropy, stats = env.run_episode(
+            train_model, 
+            competing_model, 
+            AI_PARAMS.current_stage
+        )
+        stats_history_viewer.add(stats)
+
+        if AI_PARAMS.current_stage >= 3 and model2_rating is not None:
+            new_model1_rating, new_model2_rating = elo_env.calculate(model1_rating, model2_rating, score1, score2)
+            model1_rating = new_model1_rating
+        stats_history_viewer.add_elo(model1_rating)
+            
+        league.update(train_model)
+
+        # Train the model
+        train_model.update()
+
+        # Calculate entropy
+        entropy_percent = entropy / math.log(AI_PARAMS.ACTION_SIZE)
+
+        if epoch % ENV_PARAMS.STATS_UPDATE_INTERVAL == 0 and epoch > 0:
+            stats_history_viewer.update()
+        
+        # Log metrics
+        if model2_rating is None:
+            model2_rating = elo_env.create_rating(1, 1)
+        print(f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, ELO: {model1_rating.mu:.2f} - {model2_rating.mu:.2f}")
+        for i in tqdm(range(1), desc=f"Episode: {epoch}, Score: {score1} - {score2}, Avg Reward: {avg_reward:.2f}, Ball dist: {ball_dist:.2f}, Ball hits: {ball_hits}, entropy: {entropy_percent:.2f}, ELO {model1_rating.mu:.2f} - {model2_rating.mu:.2f}"):
+            a=1
+        if epoch % ENV_PARAMS.log_interval == 0:
+            train_model.save_model(ENV_PARAMS.MODEL_NAME)
+    
+    pygame.quit()
+
+def train_PPO():
+    ENV_PARAMS = EnvironmentHyperparameters()
+    AI_PARAMS = AIHyperparameters()
+    start_time = time.time()
+    pygame.init()
+    stats_history_viewer = StatsHistoryViewer(ENV_PARAMS.MODEL_NAME)
+
+    ENV_PARAMS.GAME_DURATION = AI_PARAMS.stage1_time
+    elo_env = ELO()
 
     model1_rating = elo_env.init_rating()
 
@@ -102,8 +267,6 @@ def train_PPO():
     competing_model.policy_old.eval()
     competing_model.policy.requires_grad = False
     competing_model.policy_old.requires_grad = False
-
-
 
     if ENV_PARAMS.Load_model:
         train_model.load_model(ENV_PARAMS.Load_model)
@@ -1034,14 +1197,18 @@ if __name__ == "__main__":
     elif ENV_PARAMS.MODE == "replay":
         replay_game()
     elif ENV_PARAMS.MODE == "train":
-        #cProfile.run("train_PPO()", "train_stats.log")
-        train_PPO()
+        if ENV_PARAMS.USE_GYM:
+            train_PPO_gym()
+        else:
+            train_PPO()
     elif ENV_PARAMS.MODE == "train_parallel":
         mp.set_start_method("spawn", force=True)
-        train_PPO_parralel()
+        if ENV_PARAMS.USE_GYM:
+            train_PPO_parralel()  # Would need to implement a gym version if needed
+        else:
+            train_PPO_parralel()
     elif ENV_PARAMS.MODE == "test":
         test_PPO()
-        pass
     elif ENV_PARAMS.MODE == "test_parallel":
         mp.set_start_method("spawn", force=True)
         test_PPO_parallel()
