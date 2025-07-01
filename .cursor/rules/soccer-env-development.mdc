@@ -1,0 +1,100 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Soccer Environment Development Rules
+
+You are working on a soccer environment project for reinforcement learning that follows PettingZoo standards.
+This project should be published to be easily used with PettingZoo
+This environment has already been implemented and is currently working but I am refactoring it to publish this environment to the PettingZoo standards. The old version of the environment is stored in the old directory at root. 
+Please ask to use the web to understand how to implement it to the current standards, if you can simply use the web unprompted please do so.
+PLEASE USE THIS TO HELP YOU IMPLEMENT THE ENVIRONMENT. Since this code has been tested and is working copying as much code as possible from `old/` is highly recommended.
+
+## Project Structure Guidelines
+
+- **Main Package**: `soccer_env/` - Contains the core environment implementation
+- **Examples**: `examples/` - Contains example scripts and demonstrations
+- **Scripts**: `scripts/` - Contains standalone utility scripts with console entry points
+- **Tests**: `tests/` - Contains test files
+- **Files**: `files/` - Contains assets, models, logs, and other data
+- **AI Scripts**: `ai_scripts/` - Contains testing and debugging scripts for development
+
+## Code Style and Standards
+
+### Python Code
+- Use meaningful variable names that reflect the soccer domain (e.g., `player`, `ball`, `goal`, `team_id`)
+- Avoid unnecessary comments, the code should reflect english without comments 
+- Small general comments organizing code and explaining large scale logic is preferred 
+
+### Import Organization
+- Always use relative imports within the soccer_env package
+- Import pygame only when needed for rendering
+- Handle import errors gracefully with fallbacks for missing dependencies
+
+### Environment Implementation
+- Follow PettingZoo AEC (Agent Environment Cycle) API standards
+- Maintain compatibility with both human and AI players
+- Ensure all actions use the format: `[move_x, move_y, kick_power, kick_direction]`
+- Handle boundary collisions and goal detection properly
+- The environment should allow for multiple stages for curriculum learning.
+    - stage 1: randomly positions players and ball with enemy team being a random agent (random actions)
+    - stage 2: randomly positioned players and ball with enemy team being selected through a league consisting of past versions of the algorithm. Selected past-versions should be selected based on recent win-rate to current team to ensure competitiveness. (Implementation details for storing past versions will be clarified when implementing the league system)
+    - stage 3: Same as Stage 2 but with the indicated original positions for the players.
+- The Environment should support the following modes:
+    - Training (not rendered) - Single worker training
+    - Parallel Training (not rendered) - Multiple workers and multiple instances of the environment running simultaneously to speed up training. Multi-GPU training on a single machine spanning different processes on different CPUs.
+    - Replaying games - This should allow for rendering stored games which could have been played without being rendered
+    - Play (Human vs Human) - 2 Players, each player controls all players on same team with one set of controls
+    - Play (Human vs AI) - Option to select 1 or 2 human players. Both human players play on the same team against AI. First player uses WASD controls, second player uses arrow keys. If team size is bigger than number of human players playing, the rest of the human team should be filled with AI agents.
+
+## Soccer-Specific Guidelines
+
+### Team Management
+- Support variable team sizes (1v1, 2v2, etc.)
+- Handle team positioning and player IDs consistently
+- Teams should have different colors (specific colors don't matter as long as they're distinguishable)
+
+### Rendering and Visualization
+- Use simple geometric shapes as fallbacks (circles for players/ball, rectangles for goals)
+- Maintain smooth animations for player movement
+- Handle pygame initialization gracefully
+
+## Console Scripts
+
+- All scripts in `scripts/` should have a `main()` function for console entry points
+- Include argument parsing with helpful descriptions
+- Provide clear usage instructions and controls information
+
+## File Organization
+
+- Keep constants in `soccer_env/envs/constants.py`
+- Separate visual constants from core game constants
+- Organize entities in `soccer_env/core/entities.py`
+- Put environment logic in `soccer_env/envs/soccer_env.py`
+
+When working with this codebase:
+1. Test both human and AI player modes
+2. Verify rendering works with and without sprites
+3. Ensure proper PettingZoo API compliance
+4. Maintain backward compatibility when possible
+
+## AI testing
+When testing the environment I encourage you to create scripts to test and debug the functionality automatically.
+This can help speed up your work by allowing you to test your work.
+When doing this please put these scripts in the directory of `ai_scripts/` to allow for clean organization of code and for me to understand what code is for the environment and what code is for testing.
+
+## IMPORTANT
+Please do not add any features, rewards, or any new features or idea which was not already implemented in the old set of code. 
+
+Please ask for permission when adding new features or ideas. The goal is to replicate the old behaviour not improve it.
+
+This is also true with constants and hyperparameters.
+
+Where ever possible copy over code from old rather than recreating existing code, this should avoid issues and bugs since the old code works perfectly but we just need to reafactor. DO NOT WRITE NEW CODE WHEN EXISTING CODE EXISTS IN OLD!
+
+
+
+
+
+
